@@ -1,0 +1,4 @@
+# Test files contain real project photos and generated PDFs. Never publish them.
+test/
+node_modules/
+*.pdf
