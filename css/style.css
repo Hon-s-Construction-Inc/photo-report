@@ -48,7 +48,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--blue); outl
 .job { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #fff; border: 1px solid var(--line);
   border-radius: 10px; cursor: pointer; text-align: left; width: 100%; }
 .job:hover { border-color: #b8c4d6; }
-.job.picked { border-color: var(--blue); background: var(--blue-soft); }
+.job.picked { border-color: var(--blue); background: var(--blue-soft); box-shadow: inset 4px 0 0 var(--blue); }
 .job .name { font-weight: 600; flex: 1; min-width: 0; } .job .sub { color: var(--muted); font-size: 13px; }
 .badge { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #eef1f5; color: #475467; white-space: nowrap; }
 .badge.has { background: #dcfae6; color: var(--green); }
@@ -287,3 +287,79 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 14px; }
 .perm { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 15px; cursor: pointer; }
 .perm input { width: 22px; height: 22px; margin: 0; accent-color: var(--blue); }
+
+.user.feats { border-color: var(--blue); background: #f5f9ff; margin-bottom: 6px; }
+.user.feats .uhead { flex-direction: column; align-items: flex-start; gap: 4px; }
+.presets { margin-top: 10px; align-items: center; flex-wrap: wrap; }
+.perm.gated { opacity: .55; } .perm i { font-style: normal; font-size: 12px; color: var(--muted); }
+.admin .lab { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 6px; }
+
+/* Home screen (Jason's sketch, v2): Find job across the top, "Working on", then My jobsite | Action list */
+.home { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.findrow { display: flex; align-items: center; gap: 12px; position: relative; }
+.findrow label { font-weight: 700; white-space: nowrap; }
+.findrow input { flex: 1; }
+.results.drop { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 40; background: var(--bg); padding: 6px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.14); }
+.results.drop:empty { display: none; }
+.home .lab { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px; }
+.selbox { display: flex; align-items: center; gap: 12px; margin: 14px 0 16px; padding: 4px 2px; }
+.selbox .lab { margin: 0; color: var(--blue); white-space: nowrap; }
+.selname { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; min-height: 40px; }
+.selname.none { color: var(--muted); font-weight: 500; font-size: 15px; }
+.selname .star { margin-left: auto; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+.col { min-width: 0; }
+.job .radio { width: 20px; height: 20px; border-radius: 10px; border: 2px solid #98a2b3; flex: none; position: relative; }
+.job.picked .radio { border-color: var(--blue); }
+.job.picked .radio::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--blue); }
+.actbox { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px 12px; }
+.actbox .sub.lab { margin: 8px 0 6px; }
+.bigs { display: grid; gap: 6px; }
+.big { display: grid; text-align: left; padding: 10px 14px; min-height: 54px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; }
+.big b { font-size: 16px; } .big span { font-size: 13px; color: var(--muted); }
+.big:not([disabled]):hover { border-color: var(--blue); background: var(--blue-soft); }
+.big[disabled] { opacity: .5; cursor: not-allowed; }
+#actUpload .big:not([disabled]) { border-color: #bcd4f4; }
+/* settings dropdown */
+.dd { position: relative; }
+.ddm { position: absolute; right: 0; top: calc(100% + 6px); min-width: 250px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.14); padding: 6px; z-index: 50; display: grid; }
+.ddm[hidden] { display: none; }
+.ddm button { text-align: left; min-height: 44px; padding: 10px 12px; border: 0; background: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+.ddm button:hover { background: #f2f4f7; }
+/* gallery */
+.lib.gal { max-height: none; overflow: visible; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); padding: 0; }
+.gph { position: relative; aspect-ratio: 1; border: 0; border-radius: 8px; overflow: hidden; background: #e5e7eb; cursor: pointer; padding: 0; }
+.gph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gph .when { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,.65)); color: #fff; font-size: 11px; padding: 14px 6px 4px; text-align: left; }
+.gph .gnote { position: absolute; top: 0; left: 0; right: 0; background: rgba(11,107,211,.85); color: #fff; font-size: 11px; padding: 3px 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* to-do form */
+.todoform { display: grid; gap: 6px; margin-top: 8px; } .todoform[hidden] { display: none; }
+.help h2 { margin-top: 16px; } .help p { margin: 4px 0 8px; }
+
+.actionsel { width: 100%; min-height: 56px; font-size: 18px; font-weight: 700; padding: 12px 44px 12px 14px; border: 2px solid var(--blue); border-radius: 12px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='10'%3E%3Cpath d='M1 1l7 7 7-7' fill='none' stroke='%230b6bd3' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 16px center; -webkit-appearance: none; appearance: none; }
+.actionsel[disabled] { border-color: var(--line); color: var(--muted); opacity: 1; background-image: none; }
+
+/* Big fingers: on touch screens every tap target is at least 44px and rows have more air. */
+@media (pointer: coarse) {
+  .btn.small { min-height: 44px; padding: 8px 14px; }
+  .icon-btn { width: 44px; height: 44px; font-size: 22px; }
+  .star { width: 48px; min-height: 48px; }
+  .topbar .star, .myjob .star { min-height: 44px; width: 44px; }
+  .job { min-height: 56px; padding: 14px 16px; font-size: 17px; }
+  .ddm button { min-height: 50px; font-size: 17px; }
+  .chip { min-height: 40px; padding: 8px 14px; font-size: 15px; }
+  .chip.tag { min-height: 46px; }
+  .folderopt { min-height: 50px; }
+  .ph .add1 { width: 46px; height: 46px; border-radius: 23px; }
+  .ph .zoom { width: 40px; height: 40px; border-radius: 20px; }
+  .rowbtns .icon-btn { width: 44px; height: 44px; }
+  .upchk, .taskchk, .perm input { width: 28px; height: 28px; }
+  .task { padding: 14px 0; } .perm { min-height: 44px; }
+  .draghandle { padding: 14px 8px; font-size: 24px; }
+  .upcard { gap: 10px; }
+  .actionsel { min-height: 60px; }
+  .taskchk { margin-top: 2px; }
+  .gph .when { font-size: 12px; }
+  select, input:not([type]), input[type=text], input[type=search], input[type=email], input[type=date], textarea { min-height: 48px; font-size: 17px; }
+}
