@@ -79,6 +79,7 @@
 
   function render() {
     destroySortables();
+    document.body.classList.toggle('editing', state.view === 'editor');
     if (state.view === 'login') renderLogin();
     else if (state.view === 'search') renderSearch();
     else if (state.view === 'editor') renderEditor();
@@ -220,16 +221,19 @@
     state.report = {
       title: job.name + ' Photo Report',
       author: state.user ? titleCase(state.user.name) : '',
-      dateText: fmtToday()
+      dateText: fmtToday(),
+      layout: 'stack'
     };
     try {
       var d = JSON.parse(localStorage.getItem(draftKey()) || 'null');
       if (d && d.sections) {
         state.sections = d.sections.map(function (s) {
-          return { title: s.title || '', note: s.note || '', layout: s.layout === 'side' ? 'side' : 'stack', fids: (s.fids || []).filter(function (id) { return state.byId[id]; }) };
+          return { title: s.title || '', note: s.note || '', fids: (s.fids || []).filter(function (id) { return state.byId[id]; }) };
         });
         state.entries = d.entries || {};
         if (d.report) { state.report.title = d.report.title || state.report.title; state.report.author = d.report.author || state.report.author; }
+        var wasSide = (d.report && d.report.layout === 'side') || (!(d.report && d.report.layout) && d.sections.some(function (x) { return x.layout === 'side'; }));
+        state.report.layout = wasSide ? 'side' : 'stack';
         if (state.sections.length) setTimeout(function () { toast('Restored your unfinished report for this job.'); }, 300);
       }
     } catch (e) { /* ignore bad draft */ }
@@ -238,7 +242,7 @@
     go('editor');
   }
 
-  function newSection() { return { title: '', note: '', layout: 'stack', fids: [] }; }
+  function newSection() { return { title: '', note: '', fids: [] }; }
   // The "active" section is where the + button and Add put photos. Tapping anywhere in a section makes it active.
   function activeIdx() {
     var i = state.sections.indexOf(state.activeSec);
@@ -295,13 +299,30 @@
       '<button class="btn small cancel-swap" data-act="cancelSwap" id="cancelSwapBtn" hidden>Cancel</button></div></section>' +
       '<section class="panel" aria-label="Report"><header><h2 class="grow">Report</h2>' +
       '<button class="btn small" data-act="addSection">+ Section</button></header>' +
-      '<div class="fields">' +
+      '<div class="rep-scroll"><div class="fields">' +
       '<label for="repTitle">Report title</label><input id="repTitle" value="' + esc(state.report.title) + '">' +
-      '<label for="repAuthor">Prepared by</label><input id="repAuthor" value="' + esc(state.report.author) + '"></div>' +
-      '<div id="sections"></div>' +
+      '<label for="repAuthor">Prepared by</label><input id="repAuthor" value="' + esc(state.report.author) + '">' +
+      '<div class="sec-layout" role="group" aria-label="Photo layout in the PDF"><span class="lab">PDF layout</span>' +
+      layoutBtn('side', 'Side by side') + layoutBtn('stack', 'Stacked') + '</div></div>' +
+      '<div id="sections"></div></div>' +
       '<div class="reportbar"><button class="btn primary" data-act="generate" id="genBtn">Generate PDF</button></div></section>' +
       '</div><datalist id="labels">' + LABELS.map(function (l) { return '<option value="' + esc(l) + '">'; }).join('') + '</datalist>';
     renderLibrary(); renderSections(); refreshBars();
+  }
+
+  function layoutBtn(v, text) {
+    var on = (state.report.layout === 'side') === (v === 'side');
+    return '<button class="seg' + (on ? ' on' : '') + '" data-act="setLayout" data-layout="' + v + '" aria-pressed="' + on + '"><i class="lay-ic ' + v + '"></i>' + text + '</button>';
+  }
+
+  // One switch for the whole report: every section uses the same PDF layout.
+  function setLayout(v) {
+    state.report.layout = v === 'side' ? 'side' : 'stack';
+    $$('.sec-layout .seg').forEach(function (b) {
+      var on = b.dataset.layout === state.report.layout;
+      b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
+    });
+    renderSections(); changed();
   }
 
   function sortedFiles() {
@@ -344,16 +365,13 @@
       return true;
     });
     box.innerHTML = state.sections.map(function (sec, si) {
-      var side = sec.layout === 'side';
+      var side = state.report.layout === 'side';
       return '<div class="sec' + (si === activeIdx() ? ' active' : '') + '" data-sec="' + si + '">' +
         '<div class="sec-head"><input class="sec-title" data-si="' + si + '" placeholder="Section ' + (si + 1) + '" value="' + esc(sec.title) + '" aria-label="Section title">' +
         '<div class="tools"><span class="here">Adding here</span><button class="icon-btn" data-act="secUp" data-si="' + si + '" aria-label="Move up">&uarr;</button>' +
         '<button class="icon-btn" data-act="secDown" data-si="' + si + '" aria-label="Move down">&darr;</button>' +
         '<button class="icon-btn" data-act="secDel" data-si="' + si + '" aria-label="Delete section">&times;</button></div></div>' +
         '<div class="sec-note"><input class="sec-note-in" data-si="' + si + '" placeholder="Description (optional)" value="' + esc(sec.note) + '" aria-label="Section description"></div>' +
-        '<div class="sec-layout" role="group" aria-label="Photo layout in the PDF"><span class="lab">PDF layout</span>' +
-        '<button class="seg' + (side ? ' on' : '') + '" data-act="secLayout" data-si="' + si + '" data-layout="side" aria-pressed="' + side + '"><i class="lay-ic side"></i>Side by side</button>' +
-        '<button class="seg' + (side ? '' : ' on') + '" data-act="secLayout" data-si="' + si + '" data-layout="stack" aria-pressed="' + !side + '"><i class="lay-ic stack"></i>Stacked</button></div>' +
         '<ul class="sec-list' + (side ? ' side' : '') + '" data-sec="' + si + '">' + sec.fids.map(rowHtml).join('') + '</ul></div>';
     }).join('');
     $$('.sec-list', box).forEach(function (ul) {
@@ -421,8 +439,10 @@
   // Drop from the photo library into a section.
   function onListAdd(evt) {
     var fid = evt.item.dataset.fid;
+    var fromSection = evt.from && evt.from.classList && evt.from.classList.contains('sec-list');
     var already = usedSet()[fid];
-    if (already) { evt.item.remove(); toast('That photo is already in the report.'); return; }
+    // A photo dragged from another section is a move. Only a library photo that is already in the report is refused.
+    if (already && !fromSection) { evt.item.remove(); toast('That photo is already in the report.'); return; }
     var dropped = state.sections[Number(evt.to.dataset.sec)]; if (dropped) { state.activeSec = dropped; state.addNew = false; }
     syncFromDom();
   }
@@ -452,7 +472,15 @@
     add.forEach(function (f) { entry(f); state.sections[si].fids.push(f); });
     state.selected = state.selected.filter(function (f) { return add.indexOf(f) === -1; });
     renderSections(); changed();
+    revealRow(add[add.length - 1]);
     toast('Added ' + add.length + ' photo' + (add.length === 1 ? '' : 's') + ' to ' + (state.sections[si].title || 'Section ' + (si + 1)) + '.');
+  }
+
+  // In the stacked (portrait) screen the report half scrolls on its own, so bring the new row into view there.
+  function revealRow(fid) {
+    if (!window.matchMedia || !window.matchMedia('(orientation: portrait)').matches) return;
+    var row = $('#sections .row[data-fid="' + fid + '"]');
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   }
 
   // Swap one photo in a section for another from the library. The slot (position, label, caption) stays.
@@ -480,7 +508,7 @@
     var a = state.selected[0], b = state.selected[1];
     var used = usedSet();
     if (used[a] || used[b]) { toast('One of those photos is already in the report.'); return; }
-    state.sections.push({ title: '', note: '', layout: 'stack', fids: [a, b] });
+    state.sections.push({ title: '', note: '', fids: [a, b] });
     state.activeSec = state.sections[state.sections.length - 1]; state.addNew = false;
     entry(a).label = 'Before Photo'; entry(a).other = false; entry(b).label = 'After Photo'; entry(b).other = false;
     state.selected = [];
@@ -603,7 +631,7 @@
         company: CFG.COMPANY, dateText: state.report.dateText, logo: logo,
         sections: state.sections.map(function (s) {
           return {
-            title: s.title, note: s.note, layout: s.layout,
+            title: s.title, note: s.note, layout: state.report.layout,
             photos: s.fids.map(function (fid) {
               var f = state.byId[fid], e = entry(fid), im = results[fid] || {};
               return { dataUrl: im.dataUrl, w: im.w, h: im.h, label: e.label, caption: e.caption, dateText: fmtDateTime(f.createdAt), creator: f.by };
@@ -725,11 +753,7 @@
         var last = $('#sections .sec:last-child'); if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         return;
       }
-      case 'secLayout': {
-        var sec = state.sections[Number(el.dataset.si)]; if (!sec) return;
-        sec.layout = el.dataset.layout === 'side' ? 'side' : 'stack';
-        renderSections(); return changed();
-      }
+      case 'setLayout': return setLayout(el.dataset.layout);
       case 'secUp': return moveSection(Number(el.dataset.si), -1);
       case 'secDown': return moveSection(Number(el.dataset.si), 1);
       case 'secDel': return removeSection(Number(el.dataset.si));
