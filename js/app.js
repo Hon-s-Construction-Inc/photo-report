@@ -224,6 +224,11 @@
 
   function newSection() { return { title: '', note: '', fids: [] }; }
   function entry(fid) { return state.entries[fid] || (state.entries[fid] = { label: '', caption: '' }); }
+  // The label dropdown: Before Photo, After Photo, or Other (free text).
+  function labelMode(e) {
+    if (e.label === 'Before Photo' || e.label === 'After Photo') return e.label;
+    return (e.other || e.label) ? '__other' : '';
+  }
   function usedSet() { var s = {}; state.sections.forEach(function (sec) { sec.fids.forEach(function (f) { s[f] = true; }); }); return s; }
   function photoTotal() { return state.sections.reduce(function (n, s) { return n + s.fids.length; }, 0); }
 
@@ -321,9 +326,15 @@
   function rowHtml(fid) {
     var f = state.byId[fid]; if (!f) return '';
     var e = entry(fid);
+    var mode = labelMode(e);
     return '<li class="row" data-fid="' + esc(fid) + '">' +
       '<img class="thumb" src="' + esc(f.thumb) + '" alt="">' +
-      '<div class="meta"><input class="lbl" data-fid="' + esc(fid) + '" list="labels" placeholder="Label (e.g. Before Photo)" value="' + esc(e.label) + '" aria-label="Photo label">' +
+      '<div class="meta"><select class="lbl-sel" data-fid="' + esc(fid) + '" aria-label="Photo label">' +
+      '<option value=""' + (mode === '' ? ' selected' : '') + '>Label: choose...</option>' +
+      '<option value="Before Photo"' + (mode === 'Before Photo' ? ' selected' : '') + '>Before Photo</option>' +
+      '<option value="After Photo"' + (mode === 'After Photo' ? ' selected' : '') + '>After Photo</option>' +
+      '<option value="__other"' + (mode === '__other' ? ' selected' : '') + '>Other (type your own)</option></select>' +
+      '<input class="lbl" data-fid="' + esc(fid) + '" placeholder="Type your label"' + (mode === '__other' ? '' : ' hidden') + ' value="' + esc(e.label) + '" aria-label="Custom label">' +
       '<textarea class="cap" data-fid="' + esc(fid) + '" placeholder="Caption (optional)" aria-label="Caption">' + esc(e.caption) + '</textarea>' +
       '<div class="sub">' + esc(fmtDateTime(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + '</div></div>' +
       '<button class="icon-btn" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo">&times;</button></li>';
@@ -400,7 +411,7 @@
     var used = usedSet();
     if (used[a] || used[b]) { toast('One of those photos is already in the report.'); return; }
     state.sections.push({ title: '', note: '', fids: [a, b] });
-    entry(a).label = 'Before Photo'; entry(b).label = 'After Photo';
+    entry(a).label = 'Before Photo'; entry(a).other = false; entry(b).label = 'After Photo'; entry(b).other = false;
     state.selected = [];
     renderSections(); changed();
     toast('Added as Before + After (first photo you tapped = Before).');
@@ -645,6 +656,20 @@
     if (t.classList.contains('sec-note-in')) { state.sections[Number(t.dataset.si)].note = t.value; return saveDraft(); }
     if (t.classList.contains('lbl')) { entry(t.dataset.fid).label = t.value; return saveDraft(); }
     if (t.classList.contains('cap')) { entry(t.dataset.fid).caption = t.value; return saveDraft(); }
+  });
+
+  document.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (!t.classList || !t.classList.contains('lbl-sel')) return;
+    var e = entry(t.dataset.fid), inp = t.parentNode.querySelector('.lbl');
+    if (t.value === '__other') {
+      e.other = true;
+      if (e.label === 'Before Photo' || e.label === 'After Photo') e.label = '';
+      inp.value = e.label; inp.hidden = false; inp.focus();
+    } else {
+      e.other = false; e.label = t.value; inp.value = ''; inp.hidden = true;
+    }
+    saveDraft();
   });
 
   document.addEventListener('keydown', function (ev) {
