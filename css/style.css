@@ -66,8 +66,12 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--blue); outl
 .panel { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); }
 .panel > header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .panel > header .grow { flex: 1; }
-.lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; padding: 12px; max-height: 68vh; overflow: auto; -webkit-overflow-scrolling: touch; }
-.ph { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #e5e7eb; cursor: pointer; border: 3px solid transparent; touch-action: manipulation; }
+/* Rows are max-content so a fixed-height library can never squeeze the tiles flat. */
+.lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 8px; padding: 12px; max-height: 68vh; overflow: auto; -webkit-overflow-scrolling: touch; }
+.lib .day { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; margin-top: 6px; padding: 4px 2px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px; }
+.lib .day:first-child { margin-top: 0; }
+.lib .day span { font-weight: 500; font-size: 12px; color: var(--muted); }
+.ph { position: relative; aspect-ratio: 1; min-height: 100px; border-radius: 8px; overflow: hidden; overflow: clip; background: #e5e7eb; cursor: pointer; border: 3px solid transparent; touch-action: manipulation; }
 .ph img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .ph.sel { border-color: var(--blue); }
 .ph .num { position: absolute; top: 4px; left: 4px; min-width: 22px; height: 22px; border-radius: 11px; background: var(--blue); color: #fff;
