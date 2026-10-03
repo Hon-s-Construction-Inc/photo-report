@@ -157,3 +157,21 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--blue); outl
 .row.replacing .icon-btn.swap { background: #f79009; color: #fff; }
 #lib.picking .ph:not(.in-report) .add1 { background: #f79009; }
 .addbar .cancel-swap[hidden], .addbar [hidden] { display: none; }
+
+/* Report-wide PDF layout switch sits in the report fields. */
+.fields .sec-layout { margin: 2px 0 0; }
+
+/* Upright iPad / iPhone: the screen is split in half. Photos on top, report below. Each half scrolls on its own and the page itself stays put. */
+@media (orientation: portrait) {
+  body.editing { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body.editing #app { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  body.editing .topbar { position: static; flex: none; }
+  body.editing .editor { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px; }
+  body.editing .editor > .panel { position: static; flex: 1 1 0; min-height: 0; max-height: none; display: flex; flex-direction: column; overflow: hidden; }
+  body.editing .editor > .panel > header { flex: none; padding: 8px 12px; }
+  body.editing .editor > .panel .lib { flex: 1; min-height: 0; max-height: none; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); padding: 8px; }
+  body.editing .addbar { flex: none; position: static; padding: 8px 10px; }
+  body.editing .rep-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  body.editing .reportbar { flex: none; position: static; padding: 8px 12px; }
+  body.editing .reportbar .btn { min-height: 40px; }
+}
