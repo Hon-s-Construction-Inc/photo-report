@@ -172,6 +172,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--blue); outl
   body.editing .editor > .panel .lib { flex: 1; min-height: 0; max-height: none; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); padding: 8px; }
   body.editing .addbar { flex: none; position: static; padding: 8px 10px; }
   body.editing .rep-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  body.editing #sections { padding-bottom: 20vh; }   /* room to scroll the last section up to the middle */
   body.editing .reportbar { flex: none; position: static; padding: 8px 12px; }
   body.editing .reportbar .btn { min-height: 40px; }
 }
