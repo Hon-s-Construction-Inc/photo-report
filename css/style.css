@@ -373,3 +373,6 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .home .job.picked .sub { color: #dbe9fb; }
 .home .job.picked .badge { background: rgba(255,255,255,.2); color: #fff; }
 .home #myJobs .job:not(.picked):hover { background: var(--blue-soft); border-color: #bcd4f4; }
+
+.added { background: #f0fdf4; border: 1px solid #a6f4c5; border-radius: 10px; padding: 12px 14px; color: var(--green); font-size: 16px; }
+.added .row2 { margin-top: 10px; } .added .row2 .btn { flex: 1; }
