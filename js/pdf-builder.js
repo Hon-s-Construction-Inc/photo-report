@@ -71,36 +71,38 @@
     footer(doc, 'Cover Page', 1, N, (d.project ? d.project + '  -  ' : '') + (d.title || ''));
   }
 
-  function drawSectionPage(doc, d, s, si, pageNo, N) {
-    header(doc, d.title, d.dateText);
+  // Section title (and optional description) sit at the top of the section's first photo page.
+  // Returns the y where the photo cards start.
+  function drawSectionHeading(doc, s, si) {
     var name = s.title && s.title.trim() ? s.title.trim() : 'Section ' + (si + 1);
+    var y = 62;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(26);
+    doc.setFontSize(16);
     setText(doc, DARK);
-    var y = 330;
-    var tl = doc.splitTextToSize(name, PAGE_W - 2 * M);
-    doc.text(tl, PAGE_W / 2, y, { align: 'center', lineHeightFactor: 1.25 });
-    y += tl.length * 32 + 6;
+    doc.text(fit(doc, name, PAGE_W - 2 * M), M, y + 16);
+    y += 26;
     if (s.note && s.note.trim()) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(13);
+      doc.setFontSize(10);
       setText(doc, GREY);
-      doc.text(doc.splitTextToSize(s.note.trim(), PAGE_W - 2 * M - 40), PAGE_W / 2, y + 10, { align: 'center', lineHeightFactor: 1.4 });
+      var lines = doc.splitTextToSize(s.note.trim(), PAGE_W - 2 * M).slice(0, 3);
+      doc.text(lines, M, y + 10, { lineHeightFactor: 1.3 });
+      y += lines.length * 13 + 4;
     }
-    footer(doc, name, pageNo, N, d.project);
+    return y + 4;
   }
 
-  function drawPhotoCard(doc, d, s, ph, num, idx) {
-    var x = M, y = CARD_TOP + idx * (CARD_H + CARD_GAP);
+  function drawPhotoCard(doc, d, s, ph, num, y, ch) {
+    var x = M;
     doc.setFillColor(CARD[0], CARD[1], CARD[2]);
-    doc.roundedRect(x, y, CARD_W, CARD_H, 4, 4, 'F');
+    doc.roundedRect(x, y, CARD_W, ch, 4, 4, 'F');
     if (ph.dataUrl && ph.w && ph.h) {
-      var sc = Math.min(CARD_W / ph.w, CARD_H / ph.h);
+      var sc = Math.min(CARD_W / ph.w, ch / ph.h);
       var iw = ph.w * sc, ih = ph.h * sc;
-      doc.addImage(ph.dataUrl, 'JPEG', x + (CARD_W - iw) / 2, y + (CARD_H - ih) / 2, iw, ih);
+      doc.addImage(ph.dataUrl, 'JPEG', x + (CARD_W - iw) / 2, y + (ch - ih) / 2, iw, ih);
     } else {
       doc.setFont('helvetica', 'italic'); doc.setFontSize(9); setText(doc, GREY);
-      doc.text('Image unavailable', x + CARD_W / 2, y + CARD_H / 2, { align: 'center' });
+      doc.text('Image unavailable', x + CARD_W / 2, y + ch / 2, { align: 'center' });
     }
     // number badge
     doc.setFillColor(255, 255, 255);
@@ -123,7 +125,7 @@
     }
     // meta, bottom of card
     var rows = [['Project:', d.project], ['Date:', ph.dateText], ['Creator:', ph.creator]];
-    var my = y + CARD_H - 26;
+    var my = y + ch - 26;
     doc.setFontSize(7.5);
     rows.forEach(function (r) {
       if (!r[1]) return;
@@ -166,9 +168,8 @@
 
     var plan = [{ type: 'cover' }];
     sections.forEach(function (s, si) {
-      plan.push({ type: 'section', s: s, si: si });
       for (var i = 0; i < s.photos.length; i += 2)
-        plan.push({ type: 'photos', s: s, si: si, start: i, items: s.photos.slice(i, i + 2) });
+        plan.push({ type: 'photos', s: s, si: si, start: i, first: i === 0, items: s.photos.slice(i, i + 2) });
     });
     var N = plan.length;
 
@@ -176,10 +177,12 @@
       if (idx > 0) doc.addPage();
       var pageNo = idx + 1;
       if (p.type === 'cover') drawCover(doc, d, total, N);
-      else if (p.type === 'section') drawSectionPage(doc, d, p.s, p.si, pageNo, N);
       else {
         header(doc, d.title, d.dateText);
-        p.items.forEach(function (ph, k) { drawPhotoCard(doc, d, p.s, ph, p.start + k + 1, k); });
+        var top = p.first ? drawSectionHeading(doc, p.s, p.si) : CARD_TOP;
+        // Two cards per page; a page that carries a section heading gets slightly shorter cards.
+        var ch = p.first ? Math.min(CARD_H, Math.floor((CARD_TOP + 2 * CARD_H + CARD_GAP - top - CARD_GAP) / 2)) : CARD_H;
+        p.items.forEach(function (ph, k) { drawPhotoCard(doc, d, p.s, ph, p.start + k + 1, top + k * (ch + CARD_GAP), ch); });
         var name = p.s.title && p.s.title.trim() ? p.s.title.trim() : 'Section ' + (p.si + 1);
         footer(doc, name, pageNo, N, d.project);
       }

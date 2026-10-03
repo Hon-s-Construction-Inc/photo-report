@@ -55,7 +55,7 @@
   /* ------------------------------------------------------------------ state */
   var state = {
     view: 'login', loginStep: 'email', email: '', user: null,
-    query: '', jobs: [], pickedJob: null, searchSeq: 0,
+    query: '', jobs: [], pickedJob: null, searchSeq: 0, deepJob: readDeepJob(),
     job: null, files: [], byId: {}, selected: [], sortDesc: true,
     sections: [], entries: {}, report: { title: '', author: '', dateText: '' },
     pdf: null, saved: false
@@ -63,6 +63,18 @@
   var sortables = [];
 
   /* ------------------------------------------------------------------ routing */
+  // A link like .../photo-report/?job=22PdMdwxvZQW (for example from a JobTread job) opens that job's photos directly.
+  function readDeepJob() {
+    try { var j = new URLSearchParams(location.search).get('job'); return /^[A-Za-z0-9]{8,20}$/.test(j || '') ? j : null; } catch (e) { return null; }
+  }
+  function afterSignIn() {
+    var id = state.deepJob; state.deepJob = null;
+    go('search');
+    if (!id) return;
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+    pullJob({ id: id, name: '' });
+  }
+
   function go(view) { state.view = view; render(); }
 
   function render() {
@@ -121,7 +133,7 @@
     if (code.replace(/\D/g, '').length !== 6) return setMsg('Enter the 6-digit code.');
     setMsg('Checking...', true);
     API.call('verifyCode', { email: state.email, code: code }).then(function (r) {
-      API.saveSession(r.token, r.user); state.user = r.user; go('search');
+      API.saveSession(r.token, r.user); state.user = r.user; afterSignIn();
     }).catch(function (e) { handleError(e, $('#msg')); });
   }
 
@@ -176,12 +188,14 @@
   }
 
   /* ------------------------------------------------------------------ pull photos */
-  function pullPhotos() {
-    var job = state.pickedJob; if (!job) return;
+  function pullPhotos() { if (state.pickedJob) pullJob(state.pickedJob); }
+
+  function pullJob(job) {
     overlay(true, 'Pulling photos...', 3);
     var all = [], page = null;
     function next() {
       return API.call('listPhotos', { jobId: job.id, page: page }).then(function (r) {
+        if (!job.name && r.jobName) job.name = r.jobName;
         all = all.concat(r.files); page = r.nextPage;
         overlay(true, 'Pulled ' + all.length + ' of ' + r.count + ' photos...', r.count ? (all.length / r.count) * 100 : 100);
         if (page && all.length < 1500) return next();
@@ -568,6 +582,7 @@
       '<a class="btn" style="text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center" href="' + esc(p.url) + '" target="_blank" rel="noopener">Open preview</a>' +
       '<button class="btn" data-act="download">Download</button>' +
       '<button class="btn" data-act="saveJT" id="saveBtn"' + (state.saved ? ' disabled' : '') + '>' + (state.saved ? 'Saved to JobTread' : 'Save to JobTread (Reports folder)') + '</button>' +
+      '<button class="btn cancel" data-act="backToEditor">Cancel</button>' +
       '</div><p id="msg" class="msg"></p></div></main>';
   }
 
@@ -683,7 +698,7 @@
   /* ------------------------------------------------------------------ start */
   function start() {
     if (!API.hasSession()) return go('login');
-    API.call('me').then(function (r) { state.user = r.user; go('search'); })
+    API.call('me').then(function (r) { state.user = r.user; afterSignIn(); })
       .catch(function (e) {
         if (e && e.code === 'auth') { API.clearSession(); return go('login'); }
         state.user = API.savedUser(); go(state.user ? 'search' : 'login');
