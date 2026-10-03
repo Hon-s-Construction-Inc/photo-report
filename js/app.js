@@ -476,6 +476,22 @@
     toast('Added ' + add.length + ' photo' + (add.length === 1 ? '' : 's') + ' to ' + (state.sections[si].title || 'Section ' + (si + 1)) + '.');
   }
 
+  // Bring a section to the middle of the report area (its own scroll box on the upright screen, the page otherwise).
+  // A section taller than the area is lined up by its top so the title stays visible.
+  function centerSection(si) {
+    var el = $('#sections .sec[data-sec="' + si + '"]'); if (!el) return;
+    var sc = $('.rep-scroll');
+    var portrait = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+    if (portrait && sc) {
+      var c = sc.getBoundingClientRect(), r = el.getBoundingClientRect();
+      var top = r.height >= c.height - 16 ? sc.scrollTop + (r.top - c.top) - 8
+                                           : sc.scrollTop + (r.top + r.height / 2) - (c.top + c.height / 2);
+      sc.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    } else if (el.scrollIntoView) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
+
   // In the stacked (portrait) screen the report half scrolls on its own, so bring the new row into view there.
   function revealRow(fid) {
     if (!window.matchMedia || !window.matchMedia('(orientation: portrait)').matches) return;
@@ -750,7 +766,7 @@
       case 'addSection': {
         state.sections.push(newSection()); state.activeSec = state.sections[state.sections.length - 1]; state.addNew = false;
         renderSections(); changed();
-        var last = $('#sections .sec:last-child'); if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        centerSection(state.sections.length - 1);
         return;
       }
       case 'setLayout': return setLayout(el.dataset.layout);
@@ -790,7 +806,7 @@
     var t = ev.target;
     if (t.id === 'targetSec') {
       if (t.value === 'new') { state.addNew = true; return; }
-      setActive(Number(t.value)); return;
+      setActive(Number(t.value)); centerSection(Number(t.value)); return;
     }
     if (!t.classList || !t.classList.contains('lbl-sel')) return;
     var e = entry(t.dataset.fid), inp = t.parentNode.querySelector('.lbl');
