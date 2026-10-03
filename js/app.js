@@ -21,6 +21,12 @@
   function fmtShort(iso) {
     return norm(new Date(iso).toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' }));
   }
+  function dayKey(iso) {
+    try { return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch (e) { return ''; }
+  }
+  function fmtDay(iso) {
+    return norm(new Date(iso).toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }));
+  }
   function fmtToday() {
     return norm(new Date().toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric', year: 'numeric' }));
   }
@@ -264,16 +270,24 @@
   function renderLibrary() {
     var lib = $('#lib'); if (!lib) return;
     var used = usedSet();
-    lib.innerHTML = sortedFiles().map(function (f) {
+    var sorted = sortedFiles(), perDay = {};
+    sorted.forEach(function (f) { var k = dayKey(f.createdAt); perDay[k] = (perDay[k] || 0) + 1; });
+    var lastDay = null;
+    lib.innerHTML = sorted.map(function (f) {
       var idx = state.selected.indexOf(f.id);
-      return '<div class="ph' + (idx > -1 ? ' sel' : '') + (used[f.id] ? ' in-report' : '') + '" data-fid="' + esc(f.id) + '" data-act="toggle">' +
+      var k = dayKey(f.createdAt), head = '';
+      if (k !== lastDay) {
+        lastDay = k;
+        head = '<div class="day">' + esc(fmtDay(f.createdAt)) + '<span>' + perDay[k] + ' photo' + (perDay[k] === 1 ? '' : 's') + '</span></div>';
+      }
+      return head + '<div class="ph' + (idx > -1 ? ' sel' : '') + (used[f.id] ? ' in-report' : '') + '" data-fid="' + esc(f.id) + '" data-act="toggle">' +
         '<img loading="lazy" src="' + esc(f.thumb) + '" alt="' + esc(f.name) + '">' +
         '<span class="num">' + (idx > -1 ? idx + 1 : '') + '</span><span class="used">In report</span>' +
         '<button class="zoom" data-act="zoom" aria-label="Enlarge">&#10530;</button>' +
         '<span class="when">' + esc(fmtShort(f.createdAt)) + '</span></div>';
     }).join('');
     var s = Sortable.create(lib, {
-      group: { name: 'photos', pull: 'clone', put: false }, sort: false, animation: 150,
+      group: { name: 'photos', pull: 'clone', put: false }, sort: false, animation: 150, draggable: '.ph',
       delay: 160, delayOnTouchOnly: true, filter: '.zoom', preventOnFilter: false
     });
     sortables.push(s);
