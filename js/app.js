@@ -65,7 +65,7 @@
   /* ------------------------------------------------------------------ routing */
   // A link like .../photo-report/?job=22PdMdwxvZQW (for example from a JobTread job) opens that job's photos directly.
   function readDeepJob() {
-    try { var j = new URLSearchParams(location.search).get('job'); return /^[A-Za-z0-9]{8,20}$/.test(j || '') ? j : null; } catch (e) { return null; }
+    try { var j = new URLSearchParams(location.search).get('job'); return /^[A-Za-z0-9]{5,20}$/.test(j || '') ? j : null; } catch (e) { return null; }
   }
   function afterSignIn() {
     var id = state.deepJob; state.deepJob = null;
@@ -142,6 +142,7 @@
     app.innerHTML =
       '<header class="topbar"><img class="logo-sm" src="icons/logo.jpg" alt="HCI"><div class="grow"><div class="title">Photo Report</div></div>' +
       '<span class="small muted">' + esc(state.user ? state.user.name : '') + '</span>' +
+      '<button class="btn small" data-act="refreshApp" aria-label="Reload the app">&#8635; Refresh</button>' +
       '<button class="btn small" data-act="signOut">Sign out</button></header>' +
       '<main class="page"><h1>Find a job</h1>' +
       '<p class="muted">Type the house number and street, then pick the job.</p>' +
@@ -247,19 +248,29 @@
   function photoTotal() { return state.sections.reduce(function (n, s) { return n + s.fids.length; }, 0); }
 
   var saveTimer;
+  function flushDraft() {
+    clearTimeout(saveTimer);
+    if (!state.job) return;
+    try { localStorage.setItem(draftKey(), JSON.stringify({ sections: state.sections, entries: state.entries, report: state.report })); } catch (e) { /* storage full */ }
+  }
   function saveDraft() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      if (!state.job) return;
-      try { localStorage.setItem(draftKey(), JSON.stringify({ sections: state.sections, entries: state.entries, report: state.report })); } catch (e) { /* storage full */ }
-    }, 400);
+    saveTimer = setTimeout(flushDraft, 400);
+  }
+
+  // Reload the newest version of the app. In the editor it comes back to the same job with the draft restored.
+  function refreshApp() {
+    var inJob = state.job && (state.view === 'editor' || state.view === 'result');
+    if (inJob) flushDraft();
+    location.href = location.pathname + '?r=' + Date.now() + (inJob ? '&job=' + encodeURIComponent(state.job.id) : '');
   }
 
   function renderEditor() {
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="backToSearch">&larr; Jobs</button>' +
       '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div>' +
-      '<span class="small muted">' + state.files.length + ' photos</span></header>' +
+      '<span class="small muted">' + state.files.length + ' photos</span>' +
+      '<button class="btn small" data-act="refreshApp" aria-label="Reload the app">&#8635; Refresh</button></header>' +
       '<div class="editor">' +
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
@@ -572,7 +583,8 @@
     var mb = (p.blob.size / 1048576).toFixed(1);
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="backToEditor">&larr; Back to edit</button>' +
-      '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div></header>' +
+      '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div>' +
+      '<button class="btn small" data-act="refreshApp" aria-label="Reload the app">&#8635; Refresh</button></header>' +
       '<main class="page result"><div class="card">' +
       '<h1>Your report is ready</h1>' +
       '<div class="summary"><span>' + p.pages + ' pages</span><span>' + p.photos + ' photos</span><span>' + mb + ' MB</span></div>' +
@@ -634,6 +646,7 @@
         state.pickedJob = state.jobs.filter(function (j) { return j.id === el.dataset.id; })[0] || null;
         return renderResults();
       case 'pull': return pullPhotos();
+      case 'refreshApp': return refreshApp();
       case 'backToSearch': return go('search');
       case 'backToEditor': return go('editor');
       case 'toggle': {
