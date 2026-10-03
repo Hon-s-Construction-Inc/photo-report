@@ -57,7 +57,7 @@
     view: 'login', loginStep: 'email', email: '', user: null,
     query: '', jobs: [], pickedJob: null, searchSeq: 0, deepJob: readDeepJob(),
     job: null, files: [], byId: {}, selected: [], sortDesc: true,
-    sections: [], entries: {}, report: { title: '', author: '', dateText: '' },
+    sections: [], entries: {}, report: { title: '', author: '', dateText: '' }, activeSec: null, addNew: false, replacing: null,
     pdf: null, saved: false
   };
   var sortables = [];
@@ -215,7 +215,7 @@
   function openEditor(job, files) {
     state.job = { id: job.id, name: job.name };
     state.files = files; state.byId = {}; files.forEach(function (f) { state.byId[f.id] = f; });
-    state.selected = []; state.sortDesc = true; state.pdf = null; state.saved = false;
+    state.selected = []; state.sortDesc = true; state.pdf = null; state.saved = false; state.replacing = null;
     state.sections = []; state.entries = {};
     state.report = {
       title: job.name + ' Photo Report',
@@ -226,7 +226,7 @@
       var d = JSON.parse(localStorage.getItem(draftKey()) || 'null');
       if (d && d.sections) {
         state.sections = d.sections.map(function (s) {
-          return { title: s.title || '', note: s.note || '', fids: (s.fids || []).filter(function (id) { return state.byId[id]; }) };
+          return { title: s.title || '', note: s.note || '', layout: s.layout === 'side' ? 'side' : 'stack', fids: (s.fids || []).filter(function (id) { return state.byId[id]; }) };
         });
         state.entries = d.entries || {};
         if (d.report) { state.report.title = d.report.title || state.report.title; state.report.author = d.report.author || state.report.author; }
@@ -234,10 +234,22 @@
       }
     } catch (e) { /* ignore bad draft */ }
     if (!state.sections.length) state.sections = [newSection()];
+    state.activeSec = state.sections[state.sections.length - 1]; state.addNew = false;
     go('editor');
   }
 
-  function newSection() { return { title: '', note: '', fids: [] }; }
+  function newSection() { return { title: '', note: '', layout: 'stack', fids: [] }; }
+  // The "active" section is where the + button and Add put photos. Tapping anywhere in a section makes it active.
+  function activeIdx() {
+    var i = state.sections.indexOf(state.activeSec);
+    return i > -1 ? i : state.sections.length - 1;
+  }
+  function setActive(si) {
+    var sec = state.sections[si]; if (!sec) return;
+    state.activeSec = sec; state.addNew = false;
+    $$('#sections .sec').forEach(function (el) { el.classList.toggle('active', Number(el.dataset.sec) === si); });
+    var sel = $('#targetSec'); if (sel) sel.value = String(si);
+  }
   function entry(fid) { return state.entries[fid] || (state.entries[fid] = { label: '', caption: '' }); }
   // The label dropdown: Before Photo, After Photo, or Other (free text).
   function labelMode(e) {
@@ -276,10 +288,11 @@
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
       '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
       '<div class="lib" id="lib"></div>' +
-      '<div class="addbar"><span id="selCount" class="small muted">Tap + on a photo to add it, or select several and tap Add.</span>' +
-      '<select id="targetSec" aria-label="Add to section"></select>' +
+      '<div class="addbar"><span id="selCount" class="small muted">Tap + to add a photo to the highlighted section.</span>' +
+      '<label class="small muted" for="targetSec">Add to</label><select id="targetSec" aria-label="Add to section"></select>' +
       '<button class="btn small primary" data-act="addSel" id="addSelBtn">Add</button>' +
-      '<button class="btn small" data-act="addPair" id="addPairBtn">Before + After</button></div></section>' +
+      '<button class="btn small" data-act="addPair" id="addPairBtn">Before + After</button>' +
+      '<button class="btn small cancel-swap" data-act="cancelSwap" id="cancelSwapBtn" hidden>Cancel</button></div></section>' +
       '<section class="panel" aria-label="Report"><header><h2 class="grow">Report</h2>' +
       '<button class="btn small" data-act="addSection">+ Section</button></header>' +
       '<div class="fields">' +
@@ -331,13 +344,17 @@
       return true;
     });
     box.innerHTML = state.sections.map(function (sec, si) {
-      return '<div class="sec" data-sec="' + si + '">' +
+      var side = sec.layout === 'side';
+      return '<div class="sec' + (si === activeIdx() ? ' active' : '') + '" data-sec="' + si + '">' +
         '<div class="sec-head"><input class="sec-title" data-si="' + si + '" placeholder="Section ' + (si + 1) + '" value="' + esc(sec.title) + '" aria-label="Section title">' +
-        '<div class="tools"><button class="icon-btn" data-act="secUp" data-si="' + si + '" aria-label="Move up">&uarr;</button>' +
+        '<div class="tools"><span class="here">Adding here</span><button class="icon-btn" data-act="secUp" data-si="' + si + '" aria-label="Move up">&uarr;</button>' +
         '<button class="icon-btn" data-act="secDown" data-si="' + si + '" aria-label="Move down">&darr;</button>' +
         '<button class="icon-btn" data-act="secDel" data-si="' + si + '" aria-label="Delete section">&times;</button></div></div>' +
         '<div class="sec-note"><input class="sec-note-in" data-si="' + si + '" placeholder="Description (optional)" value="' + esc(sec.note) + '" aria-label="Section description"></div>' +
-        '<ul class="sec-list" data-sec="' + si + '">' + sec.fids.map(rowHtml).join('') + '</ul></div>';
+        '<div class="sec-layout" role="group" aria-label="Photo layout in the PDF"><span class="lab">PDF layout</span>' +
+        '<button class="seg' + (side ? ' on' : '') + '" data-act="secLayout" data-si="' + si + '" data-layout="side" aria-pressed="' + side + '"><i class="lay-ic side"></i>Side by side</button>' +
+        '<button class="seg' + (side ? '' : ' on') + '" data-act="secLayout" data-si="' + si + '" data-layout="stack" aria-pressed="' + !side + '"><i class="lay-ic stack"></i>Stacked</button></div>' +
+        '<ul class="sec-list' + (side ? ' side' : '') + '" data-sec="' + si + '">' + sec.fids.map(rowHtml).join('') + '</ul></div>';
     }).join('');
     $$('.sec-list', box).forEach(function (ul) {
       sortables.push(Sortable.create(ul, {
@@ -353,9 +370,9 @@
     var f = state.byId[fid]; if (!f) return '';
     var e = entry(fid);
     var mode = labelMode(e);
-    return '<li class="row" data-fid="' + esc(fid) + '">' +
+    return '<li class="row' + (state.replacing === fid ? ' replacing' : '') + '" data-fid="' + esc(fid) + '">' +
       '<img class="thumb" src="' + esc(f.thumb) + '" alt="">' +
-      '<div class="meta"><select class="lbl-sel" data-fid="' + esc(fid) + '" aria-label="Photo label">' +
+      '<div class="meta"><div class="slot"></div><select class="lbl-sel" data-fid="' + esc(fid) + '" aria-label="Photo label">' +
       '<option value=""' + (mode === '' ? ' selected' : '') + '>Label: choose...</option>' +
       '<option value="Before Photo"' + (mode === 'Before Photo' ? ' selected' : '') + '>Before Photo</option>' +
       '<option value="After Photo"' + (mode === 'After Photo' ? ' selected' : '') + '>After Photo</option>' +
@@ -363,22 +380,27 @@
       '<input class="lbl" data-fid="' + esc(fid) + '" placeholder="Type your label"' + (mode === '__other' ? '' : ' hidden') + ' value="' + esc(e.label) + '" aria-label="Custom label">' +
       '<textarea class="cap" data-fid="' + esc(fid) + '" placeholder="Caption (optional)" aria-label="Caption">' + esc(e.caption) + '</textarea>' +
       '<div class="sub">' + esc(fmtDateTime(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + '</div></div>' +
-      '<button class="icon-btn" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo">&times;</button></li>';
+      '<div class="rowbtns"><button class="icon-btn swap" data-act="swap" data-fid="' + esc(fid) + '" aria-label="Replace this photo with another" title="Replace photo">&#8646;</button>' +
+      '<button class="icon-btn" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo">&times;</button></div></li>';
   }
 
   function refreshTargets() {
     var sel = $('#targetSec'); if (!sel) return;
-    var cur = sel.value;
     sel.innerHTML = state.sections.map(function (s, i) {
       return '<option value="' + i + '">' + esc(s.title || 'Section ' + (i + 1)) + '</option>';
     }).join('') + '<option value="new">New section</option>';
-    if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+    sel.value = state.addNew ? 'new' : String(activeIdx());
   }
 
   function refreshBars() {
-    var n = state.selected.length;
+    if (state.replacing && !usedSet()[state.replacing]) state.replacing = null;
+    var n = state.selected.length, rp = !!state.replacing;
     var c = $('#selCount');
-    if (c) c.textContent = n ? n + ' selected' : 'Tap + on a photo to add it, or select several and tap Add.';
+    if (c) c.textContent = rp ? 'Replacing a photo: tap + on the new photo.' : n ? n + ' selected' : 'Tap + to add a photo to the highlighted section.';
+    var lib = $('#lib'); if (lib) lib.classList.toggle('picking', rp);
+    var cs = $('#cancelSwapBtn'); if (cs) cs.hidden = !rp;
+    var ab = $('#addSelBtn'); if (ab) ab.hidden = rp;
+    var pb = $('#addPairBtn'); if (pb) pb.hidden = rp;
     var a = $('#addSelBtn'); if (a) { a.disabled = !n; a.textContent = n ? 'Add ' + n : 'Add'; }
     var p = $('#addPairBtn'); if (p) p.disabled = n !== 2;
     var g = $('#genBtn'); if (g) { var t = photoTotal(); g.disabled = !t; g.textContent = t ? 'Generate PDF (' + t + ' photo' + (t === 1 ? '' : 's') + ')' : 'Generate PDF'; }
@@ -401,6 +423,7 @@
     var fid = evt.item.dataset.fid;
     var already = usedSet()[fid];
     if (already) { evt.item.remove(); toast('That photo is already in the report.'); return; }
+    var dropped = state.sections[Number(evt.to.dataset.sec)]; if (dropped) { state.activeSec = dropped; state.addNew = false; }
     syncFromDom();
   }
 
@@ -425,10 +448,31 @@
     var si;
     if (target === 'new') { state.sections.push(newSection()); si = state.sections.length - 1; }
     else si = Math.max(0, Math.min(state.sections.length - 1, Number(target) || 0));
+    state.activeSec = state.sections[si]; state.addNew = false;
     add.forEach(function (f) { entry(f); state.sections[si].fids.push(f); });
     state.selected = state.selected.filter(function (f) { return add.indexOf(f) === -1; });
     renderSections(); changed();
     toast('Added ' + add.length + ' photo' + (add.length === 1 ? '' : 's') + ' to ' + (state.sections[si].title || 'Section ' + (si + 1)) + '.');
+  }
+
+  // Swap one photo in a section for another from the library. The slot (position, label, caption) stays.
+  function replacePhoto(oldFid, newFid) {
+    if (usedSet()[newFid]) { toast('That photo is already in the report. Pick a different one.'); return; }
+    var done = false;
+    state.sections.forEach(function (sec) {
+      var i = sec.fids.indexOf(oldFid);
+      if (i === -1 || done) return;
+      sec.fids[i] = newFid; done = true;
+      state.activeSec = sec;
+      var o = entry(oldFid), e = entry(newFid);
+      e.label = o.label; e.other = o.other; e.caption = o.caption;
+    });
+    state.replacing = null;
+    state.selected = state.selected.filter(function (f) { return f !== newFid; });
+    renderSections(); changed();
+    var row = $('#sections .row[data-fid="' + newFid + '"]');
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    toast(done ? 'Photo replaced. The label and caption were kept.' : 'Could not find that photo.');
   }
 
   function addPair() {
@@ -436,7 +480,8 @@
     var a = state.selected[0], b = state.selected[1];
     var used = usedSet();
     if (used[a] || used[b]) { toast('One of those photos is already in the report.'); return; }
-    state.sections.push({ title: '', note: '', fids: [a, b] });
+    state.sections.push({ title: '', note: '', layout: 'stack', fids: [a, b] });
+    state.activeSec = state.sections[state.sections.length - 1]; state.addNew = false;
     entry(a).label = 'Before Photo'; entry(a).other = false; entry(b).label = 'After Photo'; entry(b).other = false;
     state.selected = [];
     renderSections(); changed();
@@ -448,6 +493,7 @@
     if (s.fids.length && !confirm('Remove this section and its ' + s.fids.length + ' photo(s) from the report? The photos stay in JobTread.')) return;
     state.sections.splice(si, 1);
     if (!state.sections.length) state.sections.push(newSection());
+    if (state.activeSec === s) state.activeSec = state.sections[Math.min(si, state.sections.length - 1)];
     renderSections(); changed();
   }
 
@@ -557,7 +603,7 @@
         company: CFG.COMPANY, dateText: state.report.dateText, logo: logo,
         sections: state.sections.map(function (s) {
           return {
-            title: s.title, note: s.note,
+            title: s.title, note: s.note, layout: s.layout,
             photos: s.fids.map(function (fid) {
               var f = state.byId[fid], e = entry(fid), im = results[fid] || {};
               return { dataUrl: im.dataUrl, w: im.w, h: im.h, label: e.label, caption: e.caption, dateText: fmtDateTime(f.createdAt), creator: f.by };
@@ -635,6 +681,8 @@
   function destroySortables() { sortables.forEach(function (s) { try { s.destroy(); } catch (e) { /* gone */ } }); sortables = []; }
 
   document.addEventListener('click', function (ev) {
+    var inSec = ev.target.closest('#sections .sec');
+    if (inSec) setActive(Number(inSec.dataset.sec));
     var el = ev.target.closest('[data-act]'); if (!el) return;
     var act = el.dataset.act;
     switch (act) {
@@ -654,20 +702,41 @@
         if (i > -1) state.selected.splice(i, 1); else state.selected.push(fid);
         return changed();
       }
-      case 'addOne': ev.stopPropagation(); return addToSection([el.closest('.ph').dataset.fid], $('#targetSec').value);
+      case 'swap': {
+        var fid0 = el.dataset.fid;
+        state.replacing = state.replacing === fid0 ? null : fid0;
+        renderSections(); refreshBars();
+        if (state.replacing) toast('Now tap + on the new photo in the Photos list.');
+        return;
+      }
+      case 'cancelSwap': state.replacing = null; renderSections(); return refreshBars();
+      case 'addOne': ev.stopPropagation();
+        if (state.replacing) return replacePhoto(state.replacing, el.closest('.ph').dataset.fid);
+        return addToSection([el.closest('.ph').dataset.fid], $('#targetSec').value);
       case 'zoom': ev.stopPropagation(); return showPreview(el.closest('.ph').dataset.fid);
       case 'closePreview': $('#preview').hidden = true; return;
       case 'toggleSort': state.sortDesc = !state.sortDesc; el.textContent = state.sortDesc ? 'Newest first' : 'Oldest first'; return renderLibrary();
       case 'clearSel': state.selected = []; return changed();
       case 'addSel': return addToSection(state.selected.slice(), $('#targetSec').value);
       case 'addPair': return addPair();
-      case 'addSection': state.sections.push(newSection()); renderSections(); return changed();
+      case 'addSection': {
+        state.sections.push(newSection()); state.activeSec = state.sections[state.sections.length - 1]; state.addNew = false;
+        renderSections(); changed();
+        var last = $('#sections .sec:last-child'); if (last && last.scrollIntoView) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+      case 'secLayout': {
+        var sec = state.sections[Number(el.dataset.si)]; if (!sec) return;
+        sec.layout = el.dataset.layout === 'side' ? 'side' : 'stack';
+        renderSections(); return changed();
+      }
       case 'secUp': return moveSection(Number(el.dataset.si), -1);
       case 'secDown': return moveSection(Number(el.dataset.si), 1);
       case 'secDel': return removeSection(Number(el.dataset.si));
       case 'rm': {
         var f = el.dataset.fid;
         state.sections.forEach(function (s) { s.fids = s.fids.filter(function (x) { return x !== f; }); });
+        if (state.replacing === f) state.replacing = null;
         renderSections(); return changed();
       }
       case 'generate': return generate();
@@ -688,8 +757,17 @@
     if (t.classList.contains('cap')) { entry(t.dataset.fid).caption = t.value; return saveDraft(); }
   });
 
+  document.addEventListener('focusin', function (ev) {
+    var inSec = ev.target.closest && ev.target.closest('#sections .sec');
+    if (inSec && Number(inSec.dataset.sec) !== activeIdx()) setActive(Number(inSec.dataset.sec));
+  });
+
   document.addEventListener('change', function (ev) {
     var t = ev.target;
+    if (t.id === 'targetSec') {
+      if (t.value === 'new') { state.addNew = true; return; }
+      setActive(Number(t.value)); return;
+    }
     if (!t.classList || !t.classList.contains('lbl-sel')) return;
     var e = entry(t.dataset.fid), inp = t.parentNode.querySelector('.lbl');
     if (t.value === '__other') {
@@ -703,7 +781,7 @@
   });
 
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') $('#preview').hidden = true;
+    if (ev.key === 'Escape') { $('#preview').hidden = true; if (state.replacing) { state.replacing = null; renderSections(); refreshBars(); } }
     if (ev.key === 'Enter') {
       if (ev.target.id === 'email') doSendCode();
       else if (ev.target.id === 'code') doVerify();

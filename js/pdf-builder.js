@@ -135,6 +135,47 @@
     });
   }
 
+  // Side-by-side style: two tall photo boxes next to each other, label above, caption and details below.
+  // (The stacked style above is the other option; the section's "layout" picks which one is used.)
+  var COL_W = 260, COL_GAP = 20, BOX_H = 380;
+
+  function drawSideCard(doc, d, ph, num, x, y) {
+    if (ph.label) {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); setText(doc, DARK);
+      doc.text(fit(doc, ph.label, COL_W - 4), x, y + 12);
+    }
+    var by = y + 22;
+    doc.setFillColor(CARD[0], CARD[1], CARD[2]);
+    doc.roundedRect(x, by, COL_W, BOX_H, 4, 4, 'F');
+    if (ph.dataUrl && ph.w && ph.h) {
+      var sc = Math.min(COL_W / ph.w, BOX_H / ph.h);
+      var iw = ph.w * sc, ih = ph.h * sc;
+      doc.addImage(ph.dataUrl, 'JPEG', x + (COL_W - iw) / 2, by + (BOX_H - ih) / 2, iw, ih);
+    } else {
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(9); setText(doc, GREY);
+      doc.text('Image unavailable', x + COL_W / 2, by + BOX_H / 2, { align: 'center' });
+    }
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x + 8, by + 8, 24, 20, 3, 3, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); setText(doc, DARK);
+    doc.text(String(num), x + 20, by + 22, { align: 'center' });
+
+    var ty = by + BOX_H + 16;
+    if (ph.caption) {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); setText(doc, GREY);
+      var cl = doc.splitTextToSize(ph.caption, COL_W).slice(0, 7);
+      doc.text(cl, x, ty, { lineHeightFactor: 1.35 });
+      ty += cl.length * 13 + 8;
+    }
+    doc.setFontSize(7.5);
+    [['Project:', d.project], ['Date:', ph.dateText], ['Creator:', ph.creator]].forEach(function (r) {
+      if (!r[1]) return;
+      doc.setFont('helvetica', 'normal'); setText(doc, GREY); doc.text(r[0], x, ty);
+      setText(doc, DARK); doc.text(fit(doc, r[1], COL_W - 38), x + 38, ty);
+      ty += 12;
+    });
+  }
+
   // jsPDF's built-in fonts only cover Latin-1; swap or replace anything else so text never garbles.
   function clean(t) {
     return String(t == null ? '' : t)
@@ -150,7 +191,7 @@
       company: clean(d.company), dateText: clean(d.dateText), logo: d.logo,
       sections: (d.sections || []).map(function (s) {
         return {
-          title: clean(s.title), note: clean(s.note),
+          title: clean(s.title), note: clean(s.note), layout: s.layout === 'side' ? 'side' : 'stack',
           photos: (s.photos || []).map(function (p) {
             return { dataUrl: p.dataUrl, w: p.w, h: p.h, label: clean(p.label), caption: clean(p.caption),
                      dateText: clean(p.dateText), creator: clean(p.creator) };
@@ -180,9 +221,16 @@
       else {
         header(doc, d.title, d.dateText);
         var top = p.first ? drawSectionHeading(doc, p.s, p.si) : CARD_TOP;
-        // Two cards per page; a page that carries a section heading gets slightly shorter cards.
-        var ch = p.first ? Math.min(CARD_H, Math.floor((CARD_TOP + 2 * CARD_H + CARD_GAP - top - CARD_GAP) / 2)) : CARD_H;
-        p.items.forEach(function (ph, k) { drawPhotoCard(doc, d, p.s, ph, p.start + k + 1, top + k * (ch + CARD_GAP), ch); });
+        if (p.s.layout === 'side') {
+          // Horizontal: the pair sits side by side (first photo left, second right).
+          p.items.forEach(function (ph, k) {
+            drawSideCard(doc, d, ph, p.start + k + 1, M + k * (COL_W + COL_GAP), top + 4);
+          });
+        } else {
+          // Vertical: two cards per page, one above the other; a page that carries a section heading gets slightly shorter cards.
+          var ch = p.first ? Math.min(CARD_H, Math.floor((CARD_TOP + 2 * CARD_H + CARD_GAP - top - CARD_GAP) / 2)) : CARD_H;
+          p.items.forEach(function (ph, k) { drawPhotoCard(doc, d, p.s, ph, p.start + k + 1, top + k * (ch + CARD_GAP), ch); });
+        }
         var name = p.s.title && p.s.title.trim() ? p.s.title.trim() : 'Section ' + (p.si + 1);
         footer(doc, name, pageNo, N, d.project);
       }
