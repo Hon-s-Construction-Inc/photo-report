@@ -376,3 +376,6 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 
 .added { background: #f0fdf4; border: 1px solid #a6f4c5; border-radius: 10px; padding: 12px 14px; color: var(--green); font-size: 16px; }
 .added .row2 { margin-top: 10px; } .added .row2 .btn { flex: 1; }
+
+.btn.pick.cam { display: inline-flex; min-height: 36px; padding: 6px 12px; font-size: 14px; }
+@media (pointer: coarse) { .btn.pick.cam { min-height: 44px; } }
