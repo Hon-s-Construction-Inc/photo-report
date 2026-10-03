@@ -1,6 +1,6 @@
 {
-  "name": "HCI Photo Report",
-  "short_name": "HCI Photos",
+  "name": "HCI JobTread App",
+  "short_name": "HCI JT",
   "description": "Build before/after photo reports from JobTread photos.",
   "start_url": "./",
   "scope": "./",
