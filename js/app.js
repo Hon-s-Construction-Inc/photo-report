@@ -1484,7 +1484,7 @@
       if (!state.todos || state.todos.job.id !== job.id) return;
       if (r.jobName) state.todos.job.name = r.jobName;
       state.todos.list = r.tasks; if (state.view === 'todos') renderTodos();
-    }).catch(function (e) { state.todos.list = []; state.todos.failed = true; if (state.view === 'todos') renderTodos(); handleError(e); });
+    }).catch(function (e) { state.todos.list = []; state.todos.failed = (e && e.message) || 'Could not load the list.'; if (state.view === 'todos') renderTodos(); if (e && e.code === 'auth') handleError(e); });
   }
   function todoHtml(t) {
     var late = !t.done && t.end && t.end < isoToday();
@@ -1499,20 +1499,21 @@
     if (!list) body = '<p class="muted">Loading the to-do list...</p>';
     else {
       var open = list.filter(function (t) { return !t.done; }), done = list.filter(function (t) { return t.done; });
-      body = (open.length ? open.map(todoHtml).join('') : '<p class="muted">' + (td.failed ? 'Could not load the list.' : 'Nothing open on this job\'s to-do list.') + '</p>') +
+      body = (open.length ? open.map(todoHtml).join('') : (td.failed ? '<p class="msg">Could not load the to-do list: ' + esc(td.failed) + '</p>' : '<p class="muted">Nothing open on this job\'s to-do list.</p>')) +
         (done.length ? '<details class="tdone"><summary>' + done.length + ' completed</summary>' + done.map(todoHtml).join('') + '</details>' : '');
     }
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="todosBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">' + esc(td.job.name) + '</div><div class="small muted">To-do list</div></div>' + starBtn(td.job) + settingsMenu() + '</header>' +
       '<main class="page tasks"><section class="tgroup">' +
+      (td.added ? '<div class="added"><b>&#10003; Added to JobTread:</b> ' + esc(td.added) + '<div class="row2"><button class="btn primary" data-act="todoShowAdd">Add another to-do</button><button class="btn" data-act="todosBack">Done</button></div></div>' :
       '<button class="btn primary" data-act="todoShowAdd" id="todoShowAdd"' + (td.add ? ' hidden' : '') + '>+ Add a to-do</button>' +
       '<div class="todoform" id="todoForm"' + (td.add ? '' : ' hidden') + '><label class="small muted" for="todoName">What needs to be done?</label>' +
       '<input id="todoName" maxlength="200" placeholder="e.g. Order 4 bags of mortar for F2">' +
       '<label class="small muted" for="todoDue">Due (optional)</label><input id="todoDue" type="date">' +
       '<label class="small muted" for="todoNote">Details (optional)</label><textarea id="todoNote" rows="2" placeholder="Where, how many, who to call..."></textarea>' +
       '<button class="btn primary" data-act="todoAdd" id="todoAddBtn">Add to JobTread</button>' +
-      '<p class="small muted">It goes on the job\'s to-do list in JobTread, assigned to you.</p></div></section>' +
+      '<p class="small muted">It goes on the job\'s to-do list in JobTread, assigned to you.</p></div>') + '</section>' +
       '<section class="tgroup">' + body + '</section></main>';
     if (td.add) { var n = $('#todoName'); if (n) n.focus(); }
   }
@@ -1520,9 +1521,13 @@
     var td = state.todos, name = ($('#todoName').value || '').trim();
     if (!name) { toast('Type what needs to be done.'); $('#todoName').focus(); return; }
     var btn = $('#todoAddBtn'); btn.disabled = true; btn.textContent = 'Adding...';
+    $$('#todoForm input, #todoForm textarea').forEach(function (el) { el.disabled = true; });
     API.call('addTodo', { jobId: td.job.id, name: name, note: $('#todoNote').value, due: $('#todoDue').value || '' }).then(function () {
-      toast('Added to the to-do list.'); openTodos(td.job);
-    }).catch(function (e) { btn.disabled = false; btn.textContent = 'Add to JobTread'; handleError(e); });
+      btn.textContent = '\u2713 Added'; toast('Added to the to-do list.');
+      var j = td.job; state.todos = { job: j, list: null, add: false, added: name }; renderTodos();
+      API.call('jobTodos', { jobId: j.id }).then(function (r) { if (state.todos && state.todos.job.id === j.id) { state.todos.list = r.tasks; if (state.view === 'todos') renderTodos(); } })
+        .catch(function (e) { if (state.todos) { state.todos.list = []; state.todos.failed = (e && e.message) || 'Could not load the list.'; if (state.view === 'todos') renderTodos(); } });
+    }).catch(function (e) { btn.disabled = false; btn.textContent = 'Add to JobTread'; $$('#todoForm input, #todoForm textarea').forEach(function (el) { el.disabled = false; }); handleError(e); });
   }
   function setTodoDone(id, done, box) {
     var t = (state.todos && state.todos.list || []).filter(function (x) { return x.id === id; })[0]; if (!t) return;
@@ -1577,7 +1582,7 @@
       case 'galleryZoom': { var gf = state.gallery.files.filter(function (f) { return f.id === el.dataset.fid; })[0]; if (gf) { $('#preview-img').src = gf.thumb.replace(/size=\d+/, 'size=1024'); $('#preview').hidden = false; } return; }
       case 'todosBack': return go('search');
       case 'todoAdd': return addTodo();
-      case 'todoShowAdd': $('#todoForm').hidden = false; $('#todoShowAdd').hidden = true; $('#todoName').focus(); return;
+      case 'todoShowAdd': if (state.todos && state.todos.added) { state.todos.added = null; state.todos.add = true; renderTodos(); return; } $('#todoForm').hidden = false; $('#todoShowAdd').hidden = true; $('#todoName').focus(); return;
       case 'pull': return pullPhotos();
       case 'star': ev.stopPropagation(); return toggleMyJob(el.dataset.id, el.dataset.name);
       case 'myPhotos': return pullJob(myJob(el.dataset.id));
