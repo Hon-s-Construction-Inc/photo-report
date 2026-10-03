@@ -395,6 +395,7 @@
       settingsMenu() + '</header>' +
       '<div class="editor">' +
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
+      (can('upload') ? '<label class="btn small primary pick cam"><span>&#128247; Take photo</span><input id="camShot" type="file" accept="image/*" capture="environment"></label>' : '') +
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
       '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
       '<div class="lib" id="lib"></div>' +
@@ -580,6 +581,27 @@
     renderSections(); changed();
     revealRow(add[add.length - 1]);
     toast('Added ' + add.length + ' photo' + (add.length === 1 ? '' : 's') + ' to ' + (state.sections[si].title || 'Section ' + (si + 1)) + '.');
+  }
+
+  // Camera button in the report: shrink the photo, save it to the job in JobTread (under this person's name),
+  // then put it straight into the highlighted section.
+  function shootIntoReport(file) {
+    if (!state.job) return;
+    var target = $('#targetSec') ? $('#targetSec').value : String(activeIdx());
+    overlay(true, 'Preparing photo...', 10);
+    compressImage(file).then(function (r) {
+      overlay(true, 'Saving to JobTread...', 40);
+      return blobToB64(r.blob);
+    }).then(function (b64) {
+      return API.call('uploadFile', { jobId: state.job.id, name: 'Photo ' + stampFor(Date.now()), base64: b64, note: '', tagIds: [], folder: '' });
+    }).then(function (res) {
+      overlay(false);
+      var f = res.file; if (!f || !f.id) { toast('Saved to JobTread. Tap Refresh to see it.'); return; }
+      if (!f.thumb) f.thumb = '';
+      state.files.unshift(f); state.byId[f.id] = f;
+      renderLibrary();
+      addToSection([f.id], target);
+    }).catch(function (e) { overlay(false); handleError(e); });
   }
 
   // Bring a section to the middle of the report area (its own scroll box on the upright screen, the page otherwise).
@@ -1674,6 +1696,7 @@
   document.addEventListener('change', function (ev) {
     var t = ev.target;
     if (t.id === 'fileCam' || t.id === 'fileLib') { addFiles(t.files); t.value = ''; return; }
+    if (t.id === 'camShot') { var shot = t.files && t.files[0]; t.value = ''; if (shot) shootIntoReport(shot); return; }
     if (t.id === 'actionSel') { var act = t.value; t.value = ''; if (act) runAction(act); return; }
     if (t.classList && t.classList.contains('upchk')) { state.up.sel[t.dataset.uid] = t.checked; return paintBulk(); }
     if (t.classList && t.classList.contains('todochk')) return setTodoDone(t.dataset.id, t.checked, t);
