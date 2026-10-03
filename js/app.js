@@ -265,7 +265,7 @@
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
       '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
       '<div class="lib" id="lib"></div>' +
-      '<div class="addbar"><span id="selCount" class="small muted">Tap photos to select, or drag them into the report.</span>' +
+      '<div class="addbar"><span id="selCount" class="small muted">Tap + on a photo to add it, or select several and tap Add.</span>' +
       '<select id="targetSec" aria-label="Add to section"></select>' +
       '<button class="btn small primary" data-act="addSel" id="addSelBtn">Add</button>' +
       '<button class="btn small" data-act="addPair" id="addPairBtn">Before + After</button></div></section>' +
@@ -302,12 +302,13 @@
       return head + '<div class="ph' + (idx > -1 ? ' sel' : '') + (used[f.id] ? ' in-report' : '') + '" data-fid="' + esc(f.id) + '" data-act="toggle">' +
         '<img loading="lazy" src="' + esc(f.thumb) + '" alt="' + esc(f.name) + '">' +
         '<span class="num">' + (idx > -1 ? idx + 1 : '') + '</span><span class="used">In report</span>' +
+        '<button class="add1" data-act="addOne" aria-label="Add this photo to the report">+</button>' +
         '<button class="zoom" data-act="zoom" aria-label="Enlarge">&#10530;</button>' +
         '<span class="when">' + esc(fmtShort(f.createdAt)) + '</span></div>';
     }).join('');
     var s = Sortable.create(lib, {
       group: { name: 'photos', pull: 'clone', put: false }, sort: false, animation: 150, draggable: '.ph',
-      delay: 160, delayOnTouchOnly: true, filter: '.zoom', preventOnFilter: false
+      delay: 160, delayOnTouchOnly: true, filter: '.zoom, .add1', preventOnFilter: false
     });
     sortables.push(s);
   }
@@ -366,7 +367,7 @@
   function refreshBars() {
     var n = state.selected.length;
     var c = $('#selCount');
-    if (c) c.textContent = n ? n + ' selected' : 'Tap photos to select, or drag them into the report.';
+    if (c) c.textContent = n ? n + ' selected' : 'Tap + on a photo to add it, or select several and tap Add.';
     var a = $('#addSelBtn'); if (a) { a.disabled = !n; a.textContent = n ? 'Add ' + n : 'Add'; }
     var p = $('#addPairBtn'); if (p) p.disabled = n !== 2;
     var g = $('#genBtn'); if (g) { var t = photoTotal(); g.disabled = !t; g.textContent = t ? 'Generate PDF (' + t + ' photo' + (t === 1 ? '' : 's') + ')' : 'Generate PDF'; }
@@ -640,6 +641,7 @@
         if (i > -1) state.selected.splice(i, 1); else state.selected.push(fid);
         return changed();
       }
+      case 'addOne': ev.stopPropagation(); return addToSection([el.closest('.ph').dataset.fid], $('#targetSec').value);
       case 'zoom': ev.stopPropagation(); return showPreview(el.closest('.ph').dataset.fid);
       case 'closePreview': $('#preview').hidden = true; return;
       case 'toggleSort': state.sortDesc = !state.sortDesc; el.textContent = state.sortDesc ? 'Newest first' : 'Oldest first'; return renderLibrary();
