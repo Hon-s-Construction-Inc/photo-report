@@ -58,8 +58,13 @@
     query: '', jobs: [], pickedJob: null, searchSeq: 0, deepJob: readDeepJob(),
     job: null, files: [], byId: {}, selected: [], sortDesc: true,
     sections: [], entries: {}, report: { title: '', author: '', dateText: '' }, activeSec: null, addNew: false, replacing: null,
-    pdf: null, saved: false
+    pdf: null, saved: false,
+    up: null, myJobs: loadMyJobsCache(),
+    perms: null, isAdmin: false, filesJob: null, filesList: null, tasks: null, admin: null
   };
+  // What this person may do here (set by an Admin). Until the server answers, everything shows.
+  function can(k) { return !state.perms || state.perms[k] !== false; }
+  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; } }
   var sortables = [];
 
   /* ------------------------------------------------------------------ routing */
@@ -69,7 +74,7 @@
   }
   function afterSignIn() {
     var id = state.deepJob; state.deepJob = null;
-    go('search');
+    go('search'); syncMyJobs();
     if (!id) return;
     try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
     pullJob({ id: id, name: '' });
@@ -84,6 +89,10 @@
     else if (state.view === 'search') renderSearch();
     else if (state.view === 'editor') renderEditor();
     else if (state.view === 'result') renderResult();
+    else if (state.view === 'upload') renderUpload();
+    else if (state.view === 'files') renderFiles();
+    else if (state.view === 'tasks') renderTasks();
+    else if (state.view === 'admin') renderAdmin();
   }
 
   function handleError(err, msgEl) {
@@ -92,6 +101,7 @@
       go('login'); setTimeout(function () { setMsg('Please sign in again.'); }, 0);
       return;
     }
+    if (err && err.code === 'forbidden') { API.call('me').then(function (r) { takePerms(r); if (state.view === 'search') renderSearch(); }).catch(function () { /* ignore */ }); }
     var m = (err && err.message) || 'Something went wrong.';
     if (msgEl) msgEl.textContent = m; else toast(m);
   }
@@ -106,7 +116,7 @@
     app.innerHTML =
       '<main class="center"><div class="card login">' +
       '<img class="logo" src="icons/logo.jpg" alt="HCI">' +
-      '<h1>Photo Report</h1>' +
+      '<h1>HCI JobTread App</h1>' +
       (codeStep
         ? '<p class="muted">We sent a 6-digit code to<br><b>' + esc(state.email) + '</b></p>' +
           '<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="------" aria-label="6-digit code">' +
@@ -134,24 +144,29 @@
     if (code.replace(/\D/g, '').length !== 6) return setMsg('Enter the 6-digit code.');
     setMsg('Checking...', true);
     API.call('verifyCode', { email: state.email, code: code }).then(function (r) {
-      API.saveSession(r.token, r.user); state.user = r.user; afterSignIn();
+      API.saveSession(r.token, r.user); state.user = r.user; takePerms(r); afterSignIn();
     }).catch(function (e) { handleError(e, $('#msg')); });
   }
 
   /* ------------------------------------------------------------------ job search */
   function renderSearch() {
     app.innerHTML =
-      '<header class="topbar"><img class="logo-sm" src="icons/logo.jpg" alt="HCI"><div class="grow"><div class="title">Photo Report</div></div>' +
-      '<span class="small muted">' + esc(state.user ? state.user.name : '') + '</span>' +
+      '<header class="topbar"><img class="logo-sm" src="icons/logo.jpg" alt="HCI"><div class="grow"><div class="title">HCI JobTread App</div></div>' +
+      '<span class="small muted userName">' + esc(state.user ? state.user.name : '') + '</span>' +
+      (state.isAdmin ? '<button class="btn small" data-act="admin">Admin</button>' : '') +
+      (can('tasks') ? '<button class="btn small" data-act="tasks">&#9745; My tasks</button>' : '') +
+      (can('upload') ? '<button class="btn small" data-act="upOpenAny">&#8679; Upload</button>' : '') +
       '<button class="btn small" data-act="refreshApp" aria-label="Reload the app">&#8635; Refresh</button>' +
       '<button class="btn small" data-act="signOut">Sign out</button></header>' +
-      '<main class="page"><h1>Find a job</h1>' +
-      '<p class="muted">Type the house number and street, then pick the job.</p>' +
+      '<main class="page"><div id="myJobs"></div><h1>Find a job</h1>' +
+      '<p class="muted">Type the house number and street, then pick the job. Tap &#9734; to keep it in My jobs.</p>' +
       '<input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results"></div>' +
-      '<div class="pullbar" id="pullbar" hidden><button class="btn primary" data-act="pull" id="pullBtn">Pull photos</button></div></main>';
-    renderResults();
-    $('#q').focus();
+      '<div class="pullbar" id="pullbar" hidden>' + (can('report') ? '<button class="btn primary" data-act="pull" id="pullBtn">Pull photos</button>' : '') +
+      (can('upload') ? '<button class="btn" data-act="upOpen" id="upOpenBtn">Upload photos</button>' : '') +
+      (can('files') ? '<button class="btn" data-act="filesOpen">Files</button>' : '') + '</div></main>';
+    renderResults(); renderMyJobs();
+    if (!state.myJobs.length) $('#q').focus();
   }
 
   function renderResults() {
@@ -161,9 +176,9 @@
     else {
       box.innerHTML = state.jobs.map(function (j) {
         var picked = state.pickedJob && state.pickedJob.id === j.id;
-        return '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '">' +
+        return '<div class="jobrow"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '">' +
           '<span class="name">' + esc(j.name) + '<div class="sub">Created ' + esc(fmtShort(j.createdAt)) + '</div></span>' +
-          '<span class="badge' + (j.photoCount ? ' has' : '') + '">' + (j.photoCount ? 'Has photos' : 'No photos') + '</span></button>';
+          '<span class="badge' + (j.photoCount ? ' has' : '') + '">' + (j.photoCount ? 'Has photos' : 'No photos') + '</span></button>' + starBtn(j) + '</div>';
       }).join('');
     }
     var bar = $('#pullbar');
@@ -187,6 +202,53 @@
         renderResults();
       }).catch(function (e) { handleError(e); });
     }, 300);
+  }
+
+  /* ------------------------------------------------------------------ My jobs (each person's own short list) */
+  var MY_JOBS_KEY = 'hci_pr_myjobs';
+  function loadMyJobsCache() { try { return JSON.parse(localStorage.getItem(MY_JOBS_KEY) || '[]') || []; } catch (e) { return []; } }
+  function cacheMyJobs() { try { localStorage.setItem(MY_JOBS_KEY, JSON.stringify(state.myJobs)); } catch (e) { /* full */ } }
+  function myJob(id) { return state.myJobs.filter(function (j) { return j.id === id; })[0] || null; }
+  function isMyJob(id) { return !!myJob(id); }
+  function starBtn(j) {
+    if (!j || !j.id) return '';
+    var on = isMyJob(j.id);
+    return '<button class="star' + (on ? ' on' : '') + '" data-act="star" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Remove from My jobs' : 'Add to My jobs') + '" title="My jobs">' + (on ? '&#9733;' : '&#9734;') + '</button>';
+  }
+  // The list lives on the server (per email), so every device shows the same one. A copy is kept here for instant display.
+  function syncMyJobs() {
+    API.call('getMyJobs').then(function (r) { state.myJobs = r.jobs || []; cacheMyJobs(); paintStars(); }).catch(function () { /* keep the cached copy */ });
+  }
+  function saveMyJobs() {
+    cacheMyJobs(); paintStars();
+    API.call('setMyJobs', { jobs: state.myJobs }).catch(function (e) { if (e && e.code === 'auth') handleError(e); else toast('Could not save My jobs to the server. It is kept on this device.'); });
+  }
+  function toggleMyJob(id, name) {
+    if (isMyJob(id)) { state.myJobs = state.myJobs.filter(function (j) { return j.id !== id; }); toast('Removed from My jobs.'); }
+    else {
+      if (state.myJobs.length >= 30) return toast('My jobs holds up to 30 jobs. Remove one first.');
+      state.myJobs.unshift({ id: id, name: name || '' }); toast('Added to My jobs.');
+    }
+    saveMyJobs();
+  }
+  function paintStars() {
+    $$('.star').forEach(function (b) {
+      var on = isMyJob(b.dataset.id);
+      b.classList.toggle('on', on); b.innerHTML = on ? '&#9733;' : '&#9734;'; b.setAttribute('aria-pressed', on);
+    });
+    renderMyJobs();
+    if (state.view === 'upload' && state.up && !state.up.job) paintJobResults();
+  }
+  function renderMyJobs() {
+    var box = $('#myJobs'); if (!box) return;
+    if (!state.myJobs.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<h1>My jobs</h1><p class="muted">One tap to open. &#9733; removes a job from this list.</p><div class="mylist">' +
+      state.myJobs.map(function (j) {
+        return '<div class="myjob"><span class="name">' + esc(j.name) + '</span>' +
+          (can('report') ? '<button class="btn small primary" data-act="myPhotos" data-id="' + esc(j.id) + '">Photos / Report</button>' : '') +
+          (can('upload') ? '<button class="btn small" data-act="myUpload" data-id="' + esc(j.id) + '">Upload</button>' : '') +
+          (can('files') ? '<button class="btn small" data-act="myFiles" data-id="' + esc(j.id) + '">Files</button>' : '') + starBtn(j) + '</div>';
+      }).join('') + '</div><hr class="sep">';
   }
 
   /* ------------------------------------------------------------------ pull photos */
@@ -254,7 +316,8 @@
     $$('#sections .sec').forEach(function (el) { el.classList.toggle('active', Number(el.dataset.sec) === si); });
     var sel = $('#targetSec'); if (sel) sel.value = String(si);
   }
-  function entry(fid) { return state.entries[fid] || (state.entries[fid] = { label: '', caption: '' }); }
+  // A new report photo starts with the comment it was uploaded with, if any.
+  function entry(fid) { return state.entries[fid] || (state.entries[fid] = { label: '', caption: (state.byId[fid] && state.byId[fid].note) || '' }); }
   // The label dropdown: Before Photo, After Photo, or Other (free text).
   function labelMode(e) {
     if (e.label === 'Before Photo' || e.label === 'After Photo') return e.label;
@@ -276,6 +339,7 @@
 
   // Reload the newest version of the app. In the editor it comes back to the same job with the draft restored.
   function refreshApp() {
+    if (state.view === 'upload' && pendingCount() && !confirm('Some photos are not uploaded yet. Reload anyway and lose them?')) return;
     var inJob = state.job && (state.view === 'editor' || state.view === 'result');
     if (inJob) flushDraft();
     location.href = location.pathname + '?r=' + Date.now() + (inJob ? '&job=' + encodeURIComponent(state.job.id) : '');
@@ -285,7 +349,9 @@
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="backToSearch">&larr; Jobs</button>' +
       '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div>' +
-      '<span class="small muted">' + state.files.length + ' photos</span>' +
+      '<span class="small muted">' + state.files.length + ' photos</span>' + starBtn(state.job) +
+      (can('files') ? '<button class="btn small" data-act="editorFiles">Files</button>' : '') +
+      (can('upload') ? '<button class="btn small" data-act="openUpload">&#8679; Upload</button>' : '') +
       '<button class="btn small" data-act="refreshApp" aria-label="Reload the app">&#8635; Refresh</button></header>' +
       '<div class="editor">' +
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
@@ -684,7 +750,7 @@
       '<button class="btn primary" data-act="share">Email / Share</button>' +
       '<a class="btn" style="text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center" href="' + esc(p.url) + '" target="_blank" rel="noopener">Open preview</a>' +
       '<button class="btn" data-act="download">Download</button>' +
-      '<button class="btn" data-act="saveJT" id="saveBtn"' + (state.saved ? ' disabled' : '') + '>' + (state.saved ? 'Saved to JobTread' : 'Save to JobTread (Reports folder)') + '</button>' +
+      (can('saveJT') ? '<button class="btn" data-act="saveJT" id="saveBtn"' + (state.saved ? ' disabled' : '') + '>' + (state.saved ? 'Saved to JobTread' : 'Save to JobTread (Reports folder)') + '</button>' : '') +
       '<button class="btn cancel" data-act="backToEditor">Cancel</button>' +
       '</div><p id="msg" class="msg"></p></div></main>';
   }
@@ -721,10 +787,613 @@
     }).catch(function (e) { overlay(false); handleError(e, $('#msg')); });
   }
 
+  /* ------------------------------------------------------------------ upload from this device */
+  // Pick the job, add photos (camera or library), then organize each one (comment, JobTread tags, folder, order) and upload.
+  var PRIORITY_TAGS = ['Pre-construction', 'Demolition', 'In Progress', 'Issues', 'Changes', 'Completion', 'Inspection Reports'];
+  var MAX_TAGS = 10, MAX_PDF_MB = 15, SEP = '\u001f';
+  var prepBusy = false, upSortable = null;
+
+  function newUp(job, from) {
+    return { job: job ? { id: job.id, name: job.name } : null, from: from || 'search', q: '', jobs: [], recent: null, seq: 0,
+             info: null, items: [], sel: {}, uploaded: 0, busy: false, run: { total: 0, n: 0 }, nextId: 1, sheet: null };
+  }
+  function upItem(id) { var up = state.up; if (!up) return null; id = Number(id); return up.items.filter(function (i) { return i.id === id; })[0] || null; }
+  function isUploadable(i) { return !!i.blob && (i.status === 'ready' || i.status === 'error'); }
+  function pendingCount() {
+    var up = state.up; if (!up) return 0;
+    return up.items.filter(function (i) { return i.status === 'prep' || i.status === 'uploading' || isUploadable(i); }).length;
+  }
+  function selectedIds() {
+    var up = state.up;
+    return up.items.filter(function (i) { return up.sel[i.id] && i.status !== 'uploading' && i.status !== 'done'; }).map(function (i) { return i.id; });
+  }
+  function folderOf(it) { return it.folder || (it.kind === 'pdf' ? 'Reports' : 'Photos'); }
+  function folderLabel(raw) { return String(raw || '').split(SEP).join(' / '); }
+  function tagName(id) {
+    var t = state.up.info && state.up.info.tags.filter(function (x) { return x.id === id; })[0];
+    return t ? t.name : 'Tag';
+  }
+  function freeUp() {
+    if (!state.up) return;
+    state.up.items.forEach(function (i) { if (i.thumb) { try { URL.revokeObjectURL(i.thumb); } catch (e) { /* gone */ } } });
+    state.up = null;
+  }
+
+  function openUpload(job, from) {
+    var keep = state.up && state.up.items.length && (!job || !state.up.job || state.up.job.id === job.id);
+    if (keep) { state.up.from = from; if (job && !state.up.job) state.up.job = { id: job.id, name: job.name }; }
+    else { freeUp(); state.up = newUp(job, from); }
+    state.view = 'upload'; render();
+    if (state.up.job) loadUploadInfo(); else loadRecent();
+  }
+
+  function loadRecent() {
+    var up = state.up; if (up.recent) return;
+    API.call('recentJobs').then(function (r) { up.recent = r.jobs; paintJobResults(); })
+      .catch(function (e) { up.recent = []; paintJobResults(); handleError(e); });
+  }
+
+  function loadUploadInfo() {
+    var up = state.up, jid = up.job.id;
+    if (up.info && up.info.jobId === jid) return;
+    API.call('uploadInfo', { jobId: jid }).then(function (r) {
+      if (!state.up || !state.up.job || state.up.job.id !== jid) return;
+      r.jobId = jid; state.up.info = r;
+      if (!state.up.job.name && r.jobName) { state.up.job.name = r.jobName; paintJob(); }
+      paintList();
+    }).catch(function (e) {
+      if (e && e.code === 'auth') return handleError(e);
+      if (state.up) state.up.info = { jobId: jid, tags: [], folders: ['Photos', 'Reports'], failed: true };
+      toast('Could not load the tags and folders. You can still upload.');
+    });
+  }
+
+  function renderUpload() {
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="upBack">&larr; Back</button>' +
+      '<div class="grow"><div class="title">Upload photos</div></div>' +
+      '<button class="btn small" data-act="refreshApp" aria-label="Reload the app">&#8635; Refresh</button></header>' +
+      '<main class="page upload">' +
+      '<section class="upstep" id="upJob"></section>' +
+      '<section class="upstep"><div class="uptitle"><span class="stepnum">2</span>Add photos</div>' +
+      '<div class="pickbar"><label class="btn primary pick">Take photo<input id="fileCam" type="file" accept="image/*" capture="environment"></label>' +
+      '<label class="btn pick">Choose photos or PDFs<input id="fileLib" type="file" accept="image/*,application/pdf" multiple></label></div></section>' +
+      '<section class="upstep"><div class="uptitle"><span class="stepnum">3</span>Organize <span class="small muted" id="upCount"></span></div>' +
+      '<p class="small muted" id="upHint">For each photo: add a comment, tags and a folder. Drag the grip to change the order.</p>' +
+      '<div class="upbulk" id="upBulk"></div><ul class="uplist" id="upList"></ul></section>' +
+      '<div class="upbar" id="upBar"></div></main>' +
+      '<div class="sheet" id="sheet" hidden><div class="sheet-box"><header><b id="sheetTitle"></b>' +
+      '<button class="btn small primary" data-act="sheetDone">Done</button></header><div id="sheetBody"></div></div></div>';
+    paintJob(); paintList();
+  }
+
+  /* --- step 1: the job --- */
+  function paintJob() {
+    var box = $('#upJob'); if (!box) return;
+    var up = state.up;
+    if (up.job) {
+      box.innerHTML = '<div class="uptitle"><span class="stepnum">1</span>Job</div>' +
+        '<div class="jobchip"><span class="nm">' + esc(up.job.name || 'Job') + '</span>' +
+        (up.busy ? '' : '<button class="link" data-act="upChangeJob">Change</button>') + '</div>';
+      return;
+    }
+    box.innerHTML = '<div class="uptitle"><span class="stepnum">1</span>Pick the job</div>' +
+      '<input id="upq" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(up.q) + '">' +
+      '<div class="results" id="upResults"></div>';
+    paintJobResults();
+  }
+  function paintJobResults() {
+    var box = $('#upResults'); if (!box) return;
+    var up = state.up, searching = up.q.trim().length >= 2;
+    var list = searching ? up.jobs : (up.recent || []);
+    var html = '';
+    if (!searching && state.myJobs.length) {
+      html += '<div class="small muted">My jobs</div>' + state.myJobs.map(function (j) {
+        return '<div class="jobrow"><button class="job" data-act="upPickJob" data-id="' + esc(j.id) + '"><span class="name">' + esc(j.name) + '</span></button>' + starBtn(j) + '</div>';
+      }).join('');
+    }
+    if (!searching) html += up.recent ? '<div class="small muted sheet-sub">Open jobs, newest first. Or type to search.</div>' : '<p class="muted">Loading jobs...</p>';
+    else if (!list.length) html += '<p class="muted">No jobs found. Try fewer words or just the house number.</p>';
+    html += list.map(function (j) {
+      return '<div class="jobrow"><button class="job" data-act="upPickJob" data-id="' + esc(j.id) + '"><span class="name">' + esc(j.name) +
+        '<div class="sub">Created ' + esc(fmtShort(j.createdAt)) + '</div></span></button>' + starBtn(j) + '</div>';
+    }).join('');
+    box.innerHTML = html;
+  }
+  var upSearchTimer;
+  function onUpSearch(value) {
+    var up = state.up; up.q = value;
+    clearTimeout(upSearchTimer);
+    if (value.trim().length < 2) { up.jobs = []; return paintJobResults(); }
+    upSearchTimer = setTimeout(function () {
+      var seq = ++up.seq;
+      API.call('searchJobs', { q: value }).then(function (r) {
+        if (seq !== up.seq || state.up !== up) return;
+        up.jobs = r.jobs; paintJobResults();
+      }).catch(function (e) { handleError(e); });
+    }, 300);
+  }
+
+  /* --- step 2: adding photos --- */
+  function compressImage(file) {
+    var maxEdge = CFG.UPLOAD_IMAGE_EDGE || 2048, q = CFG.UPLOAD_IMAGE_QUALITY || 0.85;
+    var make = window.createImageBitmap
+      ? createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function () { return viaImage(file); })
+      : viaImage(file);
+    return make.then(function (bmp) {
+      var w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+      var sc = Math.min(1, maxEdge / Math.max(w0, h0));
+      var w = Math.max(1, Math.round(w0 * sc)), h = Math.max(1, Math.round(h0 * sc));
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(bmp, 0, 0, w, h);
+      return new Promise(function (res, rej) {
+        c.toBlob(function (b) { b ? res({ blob: b, w: w, h: h }) : rej(new Error('encode')); }, 'image/jpeg', q);
+      });
+    });
+  }
+
+  function addFiles(files) {
+    var up = state.up; if (!up || up.busy || !files || !files.length) return;
+    var skipped = 0, bigPdf = 0;
+    Array.prototype.slice.call(files).forEach(function (f) {
+      var isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+      var isImg = /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name || '');
+      if (!isPdf && !isImg) { skipped++; return; }
+      if (isPdf && f.size > MAX_PDF_MB * 1048576) { bigPdf++; return; }
+      up.items.push({
+        id: up.nextId++, name: f.name || 'Photo', kind: isPdf ? 'pdf' : 'photo', when: f.lastModified || Date.now(),
+        note: '', tags: [], folder: '', status: isPdf ? 'ready' : 'prep', err: '',
+        src: isPdf ? null : f, blob: isPdf ? f : null, thumb: null, size: f.size
+      });
+    });
+    if (skipped) toast(skipped + ' file(s) skipped. Only photos and PDFs can be uploaded.');
+    if (bigPdf) toast(bigPdf + ' PDF(s) skipped. The limit is ' + MAX_PDF_MB + ' MB each.');
+    paintList(); prepQueue();
+  }
+
+  // Shrinks photos one at a time (a 12 MP iPad photo becomes about 0.5 to 1 MB) so many photos do not exhaust memory.
+  function prepQueue() {
+    var up = state.up; if (prepBusy || !up) return;
+    var it = up.items.filter(function (x) { return x.status === 'prep'; })[0];
+    if (!it) { paintBar(); return; }
+    prepBusy = true;
+    compressImage(it.src).then(function (r) {
+      it.blob = r.blob; it.size = r.blob.size; it.thumb = URL.createObjectURL(r.blob); it.status = 'ready';
+    }).catch(function () { it.status = 'error'; it.err = 'Could not read this photo. Remove it and try again.'; })
+      .then(function () {
+        it.src = null; prepBusy = false;
+        if (state.up !== up || up.items.indexOf(it) === -1) { if (it.thumb) URL.revokeObjectURL(it.thumb); } else paintItem(it);
+        if (state.up) { paintBar(); prepQueue(); }
+      });
+  }
+
+  /* --- step 3: organizing --- */
+  function statusText(it) {
+    if (it.status === 'prep') return 'Preparing...';
+    if (it.status === 'uploading') return 'Uploading...';
+    if (it.status === 'done') return '✓ Saved to ' + folderLabel(it.saved || folderOf(it));
+    if (it.status === 'error') return it.err || 'Failed';
+    return (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(it.size / 1024)) + ' KB');
+  }
+  function thumbHtml(it) {
+    if (it.kind === 'pdf') return '<div class="pdfic">PDF</div>';
+    return it.thumb ? '<img src="' + esc(it.thumb) + '" alt="">' : '<div class="pdfic">&hellip;</div>';
+  }
+  function cardHtml(it) {
+    var up = state.up, locked = it.status === 'uploading' || it.status === 'done', dis = locked ? ' disabled' : '';
+    var tags = it.tags.map(function (id) {
+      return '<button class="chip on" data-act="upTagDel" data-uid="' + it.id + '" data-tag="' + esc(id) + '"' + dis + '>' + esc(tagName(id)) + ' &times;</button>';
+    }).join('');
+    return '<li class="upcard ' + it.status + '" data-uid="' + it.id + '">' +
+      '<input type="checkbox" class="upchk" data-uid="' + it.id + '" aria-label="Select this photo"' + (up.sel[it.id] ? ' checked' : '') + dis + '>' +
+      '<span class="draghandle" aria-label="Drag to change the order">&#8942;&#8942;</span>' +
+      '<div class="upthumb">' + thumbHtml(it) + '</div>' +
+      '<div class="upmeta">' +
+      '<textarea class="upnote" data-uid="' + it.id + '" maxlength="1000" rows="2" placeholder="Add a comment (optional)" aria-label="Comment"' + dis + '>' + esc(it.note) + '</textarea>' +
+      '<div class="upchips">' + tags + '<button class="chip add" data-act="upTags" data-uid="' + it.id + '"' + dis + '>+ Tag</button></div>' +
+      '<div class="uprow"><button class="chip folder" data-act="upFolder" data-uid="' + it.id + '"' + dis + '>&#128193; ' + esc(folderLabel(folderOf(it))) + '</button>' +
+      '<span class="upstatus">' + esc(statusText(it)) + '</span></div></div>' +
+      '<button class="icon-btn" data-act="upRemove" data-uid="' + it.id + '" aria-label="Remove"' + dis + '>&times;</button></li>';
+  }
+  function cardEl(id) {
+    return $$('#upList > li').filter(function (li) { return li.dataset.uid === String(id); })[0] || null;
+  }
+  // Update one card in place (keeps the cursor if someone is typing in it).
+  function paintItem(it) {
+    var li = cardEl(it.id); if (!li) return;
+    var locked = it.status === 'uploading' || it.status === 'done';
+    li.className = 'upcard ' + it.status;
+    $('.upthumb', li).innerHTML = thumbHtml(it);
+    $('.upstatus', li).textContent = statusText(it);
+    $$('textarea, input.upchk, button', li).forEach(function (el) { el.disabled = locked; });
+  }
+
+  function paintList() {
+    var ul = $('#upList'); if (!ul) return;
+    var up = state.up;
+    if (upSortable) { try { upSortable.destroy(); } catch (e) { /* gone */ } sortables = sortables.filter(function (x) { return x !== upSortable; }); upSortable = null; }
+    ul.innerHTML = up.items.map(cardHtml).join('');
+    if (up.items.length) {
+      upSortable = Sortable.create(ul, { handle: '.draghandle', animation: 150, ghostClass: 'sortable-ghost', disabled: up.busy, onEnd: onUpReorder });
+      sortables.push(upSortable);
+    }
+    var c = $('#upCount'); if (c) c.textContent = up.items.length ? '(' + up.items.length + ')' : '';
+    var h = $('#upHint'); if (h) h.hidden = !up.items.length;
+    paintBulk(); paintBar();
+  }
+  function onUpReorder() {
+    var up = state.up, byId = {};
+    up.items.forEach(function (i) { byId[i.id] = i; });
+    var order = $$('#upList > li').map(function (li) { return byId[li.dataset.uid]; }).filter(Boolean);
+    if (order.length === up.items.length) up.items = order;
+  }
+
+  function paintBulk() {
+    var box = $('#upBulk'); if (!box) return;
+    var up = state.up, n = selectedIds().length;
+    if (!up.items.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<button class="link" data-act="upSelAll">Select all</button>' + (n
+      ? '<span class="small"><b>' + n + '</b> selected</span>' +
+        '<button class="btn small" data-act="upBulkTags">Tag...</button><button class="btn small" data-act="upBulkFolder">Folder...</button>' +
+        '<button class="btn small cancel" data-act="upBulkRemove">Remove</button><button class="link" data-act="upSelNone">Clear</button>'
+      : '');
+  }
+
+  function paintBar() {
+    var bar = $('#upBar'); if (!bar) return;
+    var up = state.up, items = up.items;
+    var count = function (st) { return items.filter(function (i) { return i.status === st; }).length; };
+    var prep = count('prep'), done = count('done'), todo = items.filter(isUploadable).length;
+    var err = items.filter(function (i) { return i.status === 'error' && i.blob; }).length;
+    var status, buttons;
+    if (up.busy) {
+      status = 'Uploading ' + Math.min(up.run.n + 1, up.run.total) + ' of ' + up.run.total + '...';
+      buttons = '<button class="btn primary" disabled>Uploading...</button>';
+    } else if (todo) {
+      status = (err ? err + ' did not upload. ' : '') + todo + ' ready' + (prep ? ', ' + prep + ' preparing' : '');
+      buttons = '<button class="btn primary" data-act="upGo" id="upGo"' + (!up.job || prep ? ' disabled' : '') + '>' +
+        (up.job ? (err ? 'Retry / Upload (' + todo + ')' : 'Upload (' + todo + ')') : 'Pick a job first') + '</button>';
+    } else if (prep) {
+      status = 'Preparing photos...'; buttons = '<button class="btn primary" disabled>Upload</button>';
+    } else if (done) {
+      var where = {}; items.forEach(function (i) { if (i.status === 'done') where[folderLabel(i.saved || folderOf(i))] = true; });
+      status = '✓ ' + done + ' saved to JobTread: ' + (up.job ? up.job.name : '') + ' > Files > ' + Object.keys(where).join(', ');
+      buttons = (can('report') ? '<button class="btn" data-act="upReport">Make a report from this job</button>' : '') + '<button class="btn primary" data-act="upMore">Upload more</button>';
+    } else {
+      status = 'Add photos above.'; buttons = '<button class="btn primary" disabled>Upload</button>';
+    }
+    bar.innerHTML = '<div class="upstatusline" id="upStatus">' + esc(status) + '</div><div class="upbtns">' + buttons + '</div>';
+    $$('.pick').forEach(function (l) { l.classList.toggle('off', up.busy); });
+    var fc = $('#fileCam'), fl = $('#fileLib'); if (fc) fc.disabled = up.busy; if (fl) fl.disabled = up.busy;
+  }
+
+  /* --- the tag / folder sheet (for one photo, or for all selected) --- */
+  function openSheet(kind, ids) {
+    if (!ids.length) return;
+    var up = state.up;
+    if (!up.job) { toast('Pick the job first.'); return; }
+    up.sheet = { kind: kind, ids: ids };
+    $('#sheet').hidden = false; paintSheet();
+  }
+  function closeSheet() {
+    var sh = $('#sheet'); if (sh) sh.hidden = true;
+    if (state.up) { state.up.sheet = null; paintList(); }
+  }
+  function sheetItems() { return state.up.sheet.ids.map(upItem).filter(Boolean); }
+  function paintSheet() {
+    var up = state.up, sh = up.sheet; if (!sh) return;
+    var items = sheetItems(), many = items.length > 1, body = $('#sheetBody');
+    $('#sheetTitle').textContent = (sh.kind === 'tags' ? 'Tags' : 'Folder') + (many ? ' for ' + items.length + ' photos' : '');
+    if (!up.info) { body.innerHTML = '<p class="muted">Loading from JobTread...</p>'; return; }
+    if (sh.kind === 'tags') {
+      var tags = up.info.tags.slice().sort(function (a, b) {
+        var pa = PRIORITY_TAGS.indexOf(a.name), pb = PRIORITY_TAGS.indexOf(b.name);
+        return (pa < 0 ? 99 : pa) - (pb < 0 ? 99 : pb) || a.name.localeCompare(b.name);
+      });
+      var chip = function (t) {
+        var have = items.filter(function (i) { return i.tags.indexOf(t.id) > -1; }).length;
+        var st = have === items.length ? ' on' : have ? ' some' : '';
+        return '<button class="chip tag' + st + '" data-act="sheetTag" data-tag="' + esc(t.id) + '">' + esc(t.name) + '</button>';
+      };
+      var first = tags.filter(function (t) { return PRIORITY_TAGS.indexOf(t.name) > -1; }), rest = tags.filter(function (t) { return PRIORITY_TAGS.indexOf(t.name) < 0; });
+      body.innerHTML = tags.length
+        ? '<div class="chips">' + first.map(chip).join('') + '</div>' + (rest.length ? '<div class="small muted sheet-sub">Other tags</div><div class="chips">' + rest.map(chip).join('') + '</div>' : '') +
+          '<p class="small muted">Tap to turn a tag on or off. Up to ' + MAX_TAGS + ' per photo.</p>'
+        : '<p class="muted">JobTread has no file tags to offer.</p>';
+      return;
+    }
+    var folders = up.info.folders.slice();
+    items.forEach(function (i) { var f = folderOf(i); if (folders.indexOf(f) < 0) folders.push(f); });
+    sh.folders = folders;
+    body.innerHTML = '<div class="folders">' + folders.map(function (f, k) {
+      var on = items.every(function (i) { return folderOf(i) === f; });
+      return '<button class="folderopt' + (on ? ' on' : '') + '" data-act="sheetFolder" data-fi="' + k + '">&#128193; ' + esc(folderLabel(f)) + '</button>';
+    }).join('') + '</div>' +
+      '<div class="newfolder"><label class="small muted" for="newFolder">Or make a new folder (use / for a sub-folder, e.g. Photos/Kitchen)</label>' +
+      '<div class="row2"><input id="newFolder" placeholder="New folder name" maxlength="100"><button class="btn small primary" data-act="sheetNewFolder">Use</button></div></div>';
+  }
+  function toggleTag(tagId) {
+    var items = sheetItems(), all = items.every(function (i) { return i.tags.indexOf(tagId) > -1; }), blocked = 0;
+    items.forEach(function (i) {
+      var k = i.tags.indexOf(tagId);
+      if (all) { if (k > -1) i.tags.splice(k, 1); }
+      else if (k < 0) { if (i.tags.length >= MAX_TAGS) blocked++; else i.tags.push(tagId); }
+    });
+    if (blocked) toast(blocked + ' photo(s) already have ' + MAX_TAGS + ' tags.');
+    paintSheet();
+  }
+  function setFolder(raw) {
+    sheetItems().forEach(function (i) { i.folder = raw === (i.kind === 'pdf' ? 'Reports' : 'Photos') ? '' : raw; });
+    closeSheet();
+  }
+  function newFolderName() {
+    var v = ($('#newFolder') && $('#newFolder').value || '').replace(/[\\>]/g, '/');
+    var parts = v.split('/').map(function (p) { return p.replace(/[^\w .,&()#'-]/g, ' ').replace(/\s+/g, ' ').trim(); }).filter(Boolean).slice(0, 4);
+    return parts.join(SEP);
+  }
+
+  /* --- uploading --- */
+  function stampFor(ms) {
+    var d = new Date(ms || Date.now());
+    var tm = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d).replace(':', '');
+    return dayKey(d.toISOString()) + ' ' + tm;
+  }
+  function nameFor(it, pos) {
+    return it.kind === 'pdf' ? (safeFileName(String(it.name).replace(/\.pdf$/i, '')) || 'Document') : 'Photo ' + stampFor(it.when) + ' #' + pos;
+  }
+  function setSortDisabled(on) { if (upSortable) upSortable.option('disabled', !!on); }
+
+  // One photo at a time, in the order shown, so JobTread lists them the way they were arranged.
+  function startUpload() {
+    var up = state.up;
+    if (!up || up.busy) return;
+    if (!up.job) return toast('Pick the job first.');
+    if (up.items.some(function (i) { return i.status === 'prep'; })) return toast('Still preparing photos. One moment.');
+    var todo = up.items.filter(isUploadable);
+    if (!todo.length) return;
+    up.busy = true; up.run = { total: todo.length, n: 0 }; setSortDisabled(true); paintJob(); paintBar();
+    var i = 0, failed = 0, stop = null;
+    function finish() {
+      up.busy = false; setSortDisabled(false); paintJob(); paintBar();
+      toast(stop || (failed ? failed + ' photo(s) did not upload. Tap Retry.' : 'Saved to JobTread.'));
+    }
+    function next() {
+      if (i >= todo.length || stop) return finish();
+      var it = todo[i++]; it.status = 'uploading'; it.err = ''; paintItem(it); paintBar();
+      var pos = up.items.indexOf(it) + 1;
+      return blobToB64(it.blob).then(function (b64) {
+        return API.call('uploadFile', { jobId: up.job.id, name: nameFor(it, pos), base64: b64, note: it.note.trim(), tagIds: it.tags, folder: it.folder });
+      }).then(function (r) {
+        it.status = 'done'; it.saved = r.folder; up.uploaded++;
+      }).catch(function (e) {
+        if (e && e.code === 'auth') { it.status = 'ready'; throw e; }
+        it.status = 'error'; it.err = (e && e.message) || 'Upload failed.'; failed++;
+        if (e && /^(no_key|key_invalid|key_mismatch)$/.test(e.code)) stop = e.message; // same problem for every photo, so stop
+      }).then(function () { up.run.n++; paintItem(it); paintBar(); return next(); });
+    }
+    next().catch(function (e) { up.busy = false; setSortDisabled(false); handleError(e); });
+  }
+
+  function upBack() {
+    var up = state.up; if (!up) return go('search');
+    if (up.busy) return toast('Please wait for the upload to finish.');
+    var n = pendingCount();
+    if (n && !confirm('Leave without uploading ' + n + ' item' + (n === 1 ? '' : 's') + '?')) return;
+    var uploaded = up.uploaded, from = up.from, jobId = up.job && up.job.id;
+    freeUp();
+    if (from === 'editor' && state.job) {
+      if (uploaded && jobId === state.job.id) return pullJob(state.job); // bring in the new photos; the report draft comes back too
+      return go('editor');
+    }
+    go('search');
+  }
+
+  function removeItems(ids) {
+    var up = state.up;
+    ids.forEach(function (id) {
+      var it = upItem(id); if (!it) return;
+      if (it.thumb) { try { URL.revokeObjectURL(it.thumb); } catch (e) { /* gone */ } }
+      up.items.splice(up.items.indexOf(it), 1); delete up.sel[id];
+    });
+    paintList();
+  }
+
+  function uploadAction(act, el, ev) {
+    var up = state.up, uid = el && el.dataset ? el.dataset.uid : null;
+    switch (act) {
+      case 'upOpenAny': return openUpload(null, 'search');
+      case 'upOpen': return state.pickedJob ? openUpload(state.pickedJob, 'search') : openUpload(null, 'search');
+      case 'openUpload': return openUpload(state.job, 'editor');
+      case 'upBack': return upBack();
+      case 'upPickJob': {
+        var all = up.jobs.concat(up.recent || [], state.myJobs), j = all.filter(function (x) { return x.id === el.dataset.id; })[0];
+        if (!j) return;
+        up.job = { id: j.id, name: j.name }; up.info = null; paintJob(); paintBar(); return loadUploadInfo();
+      }
+      case 'upChangeJob': up.job = null; up.info = null; paintJob(); paintBar(); return loadRecent();
+      case 'upRemove': return removeItems([uid]);
+      case 'upTags': return openSheet('tags', [Number(uid)]);
+      case 'upFolder': return openSheet('folder', [Number(uid)]);
+      case 'upTagDel': {
+        var it = upItem(uid), k = it ? it.tags.indexOf(el.dataset.tag) : -1;
+        if (k > -1) { it.tags.splice(k, 1); paintList(); }
+        return;
+      }
+      case 'upSelAll': up.items.forEach(function (i) { if (i.status !== 'uploading' && i.status !== 'done') up.sel[i.id] = true; }); return paintList();
+      case 'upSelNone': up.sel = {}; return paintList();
+      case 'upBulkTags': return openSheet('tags', selectedIds());
+      case 'upBulkFolder': return openSheet('folder', selectedIds());
+      case 'upBulkRemove': {
+        var ids = selectedIds();
+        if (ids.length && confirm('Remove ' + ids.length + ' photo' + (ids.length === 1 ? '' : 's') + ' from this list?')) removeItems(ids);
+        return;
+      }
+      case 'sheetDone': return closeSheet();
+      case 'sheetTag': return toggleTag(el.dataset.tag);
+      case 'sheetFolder': return setFolder(up.sheet.folders[Number(el.dataset.fi)]);
+      case 'sheetNewFolder': {
+        var nf = newFolderName();
+        if (!nf) return toast('Type a folder name.');
+        if (up.info && up.info.folders.indexOf(nf) < 0) up.info.folders.push(nf);
+        return setFolder(nf);
+      }
+      case 'upGo': return startUpload();
+      case 'upMore':
+        up.items.filter(function (i) { return i.status === 'done'; }).forEach(function (i) { if (i.thumb) { try { URL.revokeObjectURL(i.thumb); } catch (e) { /* gone */ } } });
+        up.items = up.items.filter(function (i) { return i.status !== 'done'; }); up.sel = {}; return paintList();
+      case 'upReport': { var jb = up.job; return pullJob({ id: jb.id, name: jb.name }); }
+    }
+  }
+
+  window.addEventListener('beforeunload', function (ev) {
+    if (state.view === 'upload' && pendingCount()) { ev.preventDefault(); ev.returnValue = ''; }
+  });
+
+  /* ------------------------------------------------------------------ Files (plans, permits, reports...) */
+  var FOLDER_SEP_UI = '\u001f';
+  function openFiles(job, from) {
+    if (!job) return;
+    state.filesJob = { id: job.id, name: job.name || '' }; state.filesFrom = from; state.filesList = null;
+    go('files');
+    API.call('listFiles', { jobId: job.id }).then(function (r) {
+      if (!state.filesJob || state.filesJob.id !== job.id) return;
+      if (r.jobName) state.filesJob.name = r.jobName;
+      state.filesList = r; if (state.view === 'files') renderFiles();
+    }).catch(function (e) { state.filesList = { files: [], failed: true }; if (state.view === 'files') renderFiles(); handleError(e); });
+  }
+  function fileKind(f) {
+    var t = String(f.type || ''), n = String(f.name || '');
+    if (/pdf/.test(t) || /\.pdf$/i.test(n)) return 'PDF';
+    if (/^image\//.test(t)) return 'IMG';
+    if (/spreadsheet|excel|csv/.test(t) || /\.(xlsx?|csv)$/i.test(n)) return 'XLS';
+    if (/word|document/.test(t) || /\.docx?$/i.test(n)) return 'DOC';
+    return (n.split('.').pop() || 'FILE').toUpperCase().slice(0, 4);
+  }
+  function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round((b || 0) / 1024)) + ' KB'; }
+  function renderFiles() {
+    var j = state.filesJob, r = state.filesList;
+    var body;
+    if (!r) body = '<p class="muted">Loading files...</p>';
+    else if (!r.files.length) body = '<p class="muted">' + (r.failed ? 'Could not load the files.' : 'No files in this job yet (photos are on the Photos screen).') + '</p>';
+    else {
+      var groups = {}, order = [];
+      r.files.forEach(function (f) {
+        var parts = (f.folder || '').split(FOLDER_SEP_UI), top = parts[0] || 'Other files', sub = parts.slice(1).join(' / ');
+        if (!groups[top]) { groups[top] = {}; order.push(top); }
+        (groups[top][sub] = groups[top][sub] || []).push(f);
+      });
+      order.sort(function (a, b) { return (a === 'Other files') - (b === 'Other files') || a.localeCompare(b); });
+      body = order.map(function (top) {
+        var subs = Object.keys(groups[top]).sort(), count = 0; subs.forEach(function (sb) { count += groups[top][sb].length; });
+        return '<div class="fgroup"><button class="fhead" data-act="folderToggle">&#128193; ' + esc(top) + '<span class="small muted">' + count + '</span><i class="chev"></i></button><div class="fbody">' +
+          subs.map(function (sb) {
+            return (sb ? '<div class="fsub">' + esc(sb) + '</div>' : '') + groups[top][sb].map(function (f) {
+              return '<button class="file" data-act="fileOpen" data-fid="' + esc(f.id) + '"><span class="fkind ' + fileKind(f).toLowerCase() + '">' + fileKind(f) + '</span>' +
+                '<span class="fname">' + esc(f.name) + (f.note ? '<div class="sub">' + esc(f.note) + '</div>' : '') + '<div class="sub">' + esc(fmtShort(f.createdAt)) + ' &middot; ' + fmtSize(f.size) + '</div></span><span class="fopen">Open</span></button>';
+            }).join('');
+          }).join('') + '</div></div>';
+      }).join('');
+      if (r.hiddenCost) body += '<p class="small muted">Cost folders (invoices, pay applications, subs...) are not shown.</p>';
+    }
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="filesBack">&larr; Back</button>' +
+      '<div class="grow"><div class="title">' + esc(j.name) + '</div><div class="small muted">Files</div></div>' + starBtn(j) +
+      '<button class="btn small" data-act="refreshApp" aria-label="Reload the app">&#8635; Refresh</button></header>' +
+      '<main class="page files">' + body + '</main>';
+  }
+  function openFileLink(fid) {
+    var f = (state.filesList && state.filesList.files || []).filter(function (x) { return x.id === fid; })[0];
+    if (!f || !f.url) return toast('No link for this file.');
+    var a = document.createElement('a'); a.href = f.url; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  /* ------------------------------------------------------------------ My tasks */
+  function openTasks() {
+    state.tasks = null; go('tasks');
+    API.call('myTasks').then(function (r) { state.tasks = r.tasks; if (state.view === 'tasks') renderTasks(); })
+      .catch(function (e) { state.tasks = []; state.tasksFailed = true; if (state.view === 'tasks') renderTasks(); handleError(e); });
+  }
+  function taskHtml(t) {
+    var late = !t.done && t.end && t.end < isoToday();
+    return '<div class="task' + (t.done ? ' done' : '') + (late ? ' late' : '') + '" data-tid="' + esc(t.id) + '">' +
+      '<input type="checkbox" class="taskchk" data-id="' + esc(t.id) + '" aria-label="Done"' + (t.done ? ' checked' : '') + '>' +
+      '<div class="tbody"><div class="tname">' + esc(t.name) + '</div>' +
+      '<div class="sub">' + (t.end ? (late ? 'Was due ' : 'Due ') + esc(fmtShort(t.end + 'T12:00:00')) : 'No date') + (t.start && t.start !== t.end ? ' &middot; starts ' + esc(fmtShort(t.start + 'T12:00:00')) : '') + (t.todo ? ' &middot; To-do' : '') + '</div>' +
+      (t.note ? '<button class="link small tnote" data-act="taskNote">Details</button><div class="tdesc">' + esc(t.note).replace(/\n/g, '<br>') + '</div>' : '') +
+      '</div></div>';
+  }
+  function renderTasks() {
+    var tasks = state.tasks, body;
+    if (!tasks) body = '<p class="muted">Loading your tasks...</p>';
+    else if (!tasks.length) body = '<p class="muted">' + (state.tasksFailed ? 'Could not load tasks.' : 'No tasks are assigned to you in JobTread.') + '</p>';
+    else {
+      var byJob = {}, order = [];
+      tasks.forEach(function (t) { var k = t.jobId || ''; if (!byJob[k]) { byJob[k] = { name: t.jobName || 'No job', id: t.jobId, open: [], done: [] }; order.push(k); } byJob[k][t.done ? 'done' : 'open'].push(t); });
+      body = order.map(function (k) {
+        var g = byJob[k];
+        return '<section class="tgroup"><h2>' + esc(g.name) + (g.id ? ' <button class="link small" data-act="taskJob" data-id="' + esc(g.id) + '" data-name="' + esc(g.name) + '">Open job</button>' : '') + '</h2>' +
+          g.open.map(taskHtml).join('') + (g.done.length ? '<details class="tdone"><summary>' + g.done.length + ' completed</summary>' + g.done.map(taskHtml).join('') + '</details>' : '') + '</section>';
+      }).join('');
+    }
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="tasksBack">&larr; Back</button>' +
+      '<div class="grow"><div class="title">My tasks</div></div>' +
+      '<button class="btn small" data-act="tasks">&#8635; Reload</button></header>' +
+      '<main class="page tasks"><p class="muted small">Tasks assigned to you in JobTread. Tick a box to mark it done.</p>' + body + '</main>';
+  }
+  function setTaskDone(id, done, box) {
+    var t = (state.tasks || []).filter(function (x) { return x.id === id; })[0]; if (!t) return;
+    box.disabled = true;
+    API.call('setTaskDone', { taskId: id, done: !!done }).then(function (r) {
+      t.done = !!r.done; renderTasks(); toast(t.done ? 'Marked done in JobTread.' : 'Reopened in JobTread.');
+    }).catch(function (e) { box.checked = !done; box.disabled = false; handleError(e); });
+  }
+
+  /* ------------------------------------------------------------------ Admin > Users */
+  // The switches and their labels come from the script (one table there), so new ones appear here with no app change.
+  function openAdmin() {
+    state.admin = null; go('admin');
+    API.call('listUsers').then(function (r) { state.admin = r; if (state.view === 'admin') renderAdmin(); })
+      .catch(function (e) { state.admin = { users: [], failed: true }; if (state.view === 'admin') renderAdmin(); handleError(e); });
+  }
+  function renderAdmin() {
+    var a = state.admin, body;
+    if (!a) body = '<p class="muted">Loading users...</p>';
+    else if (!a.users.length) body = '<p class="muted">Could not load the users.</p>';
+    else {
+      var defs = (a.perms || []).map(function (p) { return typeof p === 'string' ? { key: p, label: p } : p; });
+      body = '<div class="users">' + a.users.map(function (u) {
+        return '<div class="user' + (u.isAdmin ? ' adm' : '') + '"><div class="uhead"><b>' + esc(titleCase(u.name)) + '</b><span class="small muted">' + esc(u.email) + '</span>' +
+          '<span class="badge' + (u.isAdmin ? ' has' : '') + '">' + esc(u.role) + '</span>' +
+          '<span class="badge' + (u.hasKey ? ' has' : ' warn') + '" title="Needed to save or upload to JobTread">' + (u.hasKey ? 'JT key saved' : 'No JT key') + '</span></div>' +
+          (u.isAdmin ? '<div class="small muted">Admins always have full access here.</div>' :
+            '<div class="perms">' + defs.map(function (d) {
+              var k = d.key;
+              return '<label class="perm"><input type="checkbox" class="permchk" data-email="' + esc(u.email) + '" data-perm="' + esc(k) + '"' + (u.perms[k] ? ' checked' : '') + '><span>' + esc(d.label || k) + '</span></label>';
+            }).join('') + '</div>') + '</div>';
+      }).join('') + '</div>';
+    }
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="adminBack">&larr; Back</button>' +
+      '<div class="grow"><div class="title">Admin &rsaquo; Users</div></div></header>' +
+      '<main class="page admin"><p class="muted small">Who may do what in this app. Changes apply right away. This does not change anyone\'s JobTread role. ' +
+      'People appear here when their JobTread role is Admin or Project Manager; a "No JT key" person can look but cannot save or upload until you add their key to the script.</p>' + body + '</main>';
+  }
+  function setPerm(email, perm, on, box) {
+    var u = (state.admin && state.admin.users || []).filter(function (x) { return x.email === email; })[0]; if (!u) return;
+    var next = {}; Object.keys(u.perms).forEach(function (k) { next[k] = u.perms[k]; }); next[perm] = !!on;
+    box.disabled = true;
+    API.call('setPerms', { email: email, perms: next }).then(function (r) {
+      u.perms = r.perms; box.disabled = false; toast('Saved for ' + titleCase(u.name) + '.');
+    }).catch(function (e) { box.checked = !on; box.disabled = false; handleError(e); });
+  }
+
   /* ------------------------------------------------------------------ events */
   function destroySortables() { sortables.forEach(function (s) { try { s.destroy(); } catch (e) { /* gone */ } }); sortables = []; }
 
   document.addEventListener('click', function (ev) {
+    if (ev.target.id === 'sheet') return closeSheet();
     var inSec = ev.target.closest('#sections .sec');
     if (inSec) setActive(Number(inSec.dataset.sec));
     var el = ev.target.closest('[data-act]'); if (!el) return;
@@ -738,6 +1407,21 @@
         state.pickedJob = state.jobs.filter(function (j) { return j.id === el.dataset.id; })[0] || null;
         return renderResults();
       case 'pull': return pullPhotos();
+      case 'star': ev.stopPropagation(); return toggleMyJob(el.dataset.id, el.dataset.name);
+      case 'myPhotos': return pullJob(myJob(el.dataset.id));
+      case 'myUpload': return openUpload(myJob(el.dataset.id), 'search');
+      case 'myFiles': return openFiles(myJob(el.dataset.id), 'search');
+      case 'filesOpen': return state.pickedJob ? openFiles(state.pickedJob, 'search') : toast('Pick a job first.');
+      case 'editorFiles': return openFiles(state.job, 'editor');
+      case 'filesBack': return go(state.filesFrom === 'editor' && state.job ? 'editor' : 'search');
+      case 'fileOpen': return openFileLink(el.dataset.fid);
+      case 'folderToggle': el.closest('.fgroup').classList.toggle('closed'); return;
+      case 'tasks': return openTasks();
+      case 'tasksBack': return go('search');
+      case 'taskNote': el.closest('.task').classList.toggle('open'); return;
+      case 'taskJob': return can('report') ? pullJob({ id: el.dataset.id, name: el.dataset.name }) : openFiles({ id: el.dataset.id, name: el.dataset.name }, 'search');
+      case 'admin': return openAdmin();
+      case 'adminBack': return go('search');
       case 'refreshApp': return refreshApp();
       case 'backToSearch': return go('search');
       case 'backToEditor': return go('editor');
@@ -783,12 +1467,15 @@
       case 'share': return doShare();
       case 'download': return doDownload();
       case 'saveJT': return doSaveJT();
+      default: return uploadAction(act, el, ev);
     }
   });
 
   document.addEventListener('input', function (ev) {
     var t = ev.target;
     if (t.id === 'q') return onSearchInput(t.value);
+    if (t.id === 'upq') return onUpSearch(t.value);
+    if (t.classList.contains('upnote')) { var ui = upItem(t.dataset.uid); if (ui) ui.note = t.value; return; }
     if (t.id === 'repTitle') { state.report.title = t.value; return saveDraft(); }
     if (t.id === 'repAuthor') { state.report.author = t.value; return saveDraft(); }
     if (t.classList.contains('sec-title')) { state.sections[Number(t.dataset.si)].title = t.value; refreshTargets(); return saveDraft(); }
@@ -804,6 +1491,10 @@
 
   document.addEventListener('change', function (ev) {
     var t = ev.target;
+    if (t.id === 'fileCam' || t.id === 'fileLib') { addFiles(t.files); t.value = ''; return; }
+    if (t.classList && t.classList.contains('upchk')) { state.up.sel[t.dataset.uid] = t.checked; return paintBulk(); }
+    if (t.classList && t.classList.contains('taskchk')) return setTaskDone(t.dataset.id, t.checked, t);
+    if (t.classList && t.classList.contains('permchk')) return setPerm(t.dataset.email, t.dataset.perm, t.checked, t);
     if (t.id === 'targetSec') {
       if (t.value === 'new') { state.addNew = true; return; }
       setActive(Number(t.value)); centerSection(Number(t.value)); return;
@@ -825,13 +1516,14 @@
     if (ev.key === 'Enter') {
       if (ev.target.id === 'email') doSendCode();
       else if (ev.target.id === 'code') doVerify();
+      else if (ev.target.id === 'newFolder') uploadAction('sheetNewFolder');
     }
   });
 
   /* ------------------------------------------------------------------ start */
   function start() {
     if (!API.hasSession()) return go('login');
-    API.call('me').then(function (r) { state.user = r.user; afterSignIn(); })
+    API.call('me').then(function (r) { state.user = r.user; takePerms(r); afterSignIn(); })
       .catch(function (e) {
         if (e && e.code === 'auth') { API.clearSession(); return go('login'); }
         state.user = API.savedUser(); go(state.user ? 'search' : 'login');
