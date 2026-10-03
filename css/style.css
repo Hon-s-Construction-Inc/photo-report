@@ -363,3 +363,13 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   .gph .when { font-size: 12px; }
   select, input:not([type]), input[type=text], input[type=search], input[type=email], input[type=date], textarea { min-height: 48px; font-size: 17px; }
 }
+
+/* My jobsite: list sits in its own card; the job being worked on is solid blue. */
+.home #myJobs { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; min-height: 320px; }
+.home #myJobs .results { gap: 6px; }
+.home #myJobs .jobrow .star { border-color: transparent; background: transparent; }
+.home #myJobs .jobrow .star.on { background: #fff7e6; border-color: #fedf89; }
+.home .job.picked { background: var(--blue); border-color: var(--blue); color: #fff; box-shadow: none; }
+.home .job.picked .sub { color: #dbe9fb; }
+.home .job.picked .badge { background: rgba(255,255,255,.2); color: #fff; }
+.home #myJobs .job:not(.picked):hover { background: var(--blue-soft); border-color: #bcd4f4; }
