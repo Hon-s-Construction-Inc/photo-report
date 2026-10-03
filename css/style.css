@@ -80,7 +80,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--blue); outl
 .ph .used { position: absolute; bottom: 4px; left: 4px; font-size: 11px; font-weight: 700; background: rgba(6,118,71,.92); color: #fff; padding: 1px 7px; border-radius: 999px; display: none; }
 .ph.in-report .used { display: block; }
 .ph .zoom { position: absolute; bottom: 4px; right: 4px; width: 30px; height: 30px; border-radius: 15px; border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 15px; cursor: pointer; }
-/* The big + adds the photo straight to the section picked in the bar below; it turns into a green tick once the photo is in the report. */
+/* The big + adds the photo straight to the highlighted ("Adding here") section; it turns into a green tick once the photo is in the report. */
 .ph .add1 { position: absolute; top: 4px; right: 4px; width: 38px; height: 38px; border-radius: 19px; border: 0; background: var(--blue); color: #fff; font-size: 28px; font-weight: 700; line-height: 1; padding: 0 0 3px; cursor: pointer; box-shadow: 0 1px 5px rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; }
 .ph.in-report .add1 { background: #067647; font-size: 0; padding: 0; }
 .ph.in-report .add1::after { content: "\2713"; font-size: 20px; }
@@ -132,3 +132,28 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--blue); outl
 
 .actions .btn.cancel { background: transparent; border-color: transparent; color: var(--muted); }
 .actions .btn.cancel:hover { background: #eef1f5; color: var(--ink); }
+
+/* The section that + and Add put photos into is highlighted; tapping any section makes it the active one. */
+.sec { border-left: 4px solid transparent; transition: background .15s, border-color .15s; }
+.sec.active { border-left-color: var(--blue); background: #f5f9ff; }
+.sec .here { display: none; align-self: center; font-size: 12px; font-weight: 700; color: var(--blue); white-space: nowrap; padding-right: 4px; }
+.sec.active .here { display: inline; }
+.sec-layout { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.sec-layout .lab { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.seg { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.seg.on { border-color: var(--blue); background: #eaf2fe; color: var(--blue); font-weight: 700; }
+.lay-ic { display: inline-block; width: 22px; height: 16px; flex: none; }
+.lay-ic.side { background: linear-gradient(90deg, currentColor 0 45%, transparent 45% 55%, currentColor 55% 100%); }
+.lay-ic.stack { background: linear-gradient(180deg, currentColor 0 45%, transparent 45% 55%, currentColor 55% 100%); }
+.row .slot { display: none; font-size: 12px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .04em; }
+.sec-list.side .row .slot { display: block; }
+.sec-list.side .row:nth-child(odd) .slot::before { content: "Left photo"; }
+.sec-list.side .row:nth-child(even) .slot::before { content: "Right photo"; }
+
+/* Replace a photo: the row is outlined and the + buttons in the Photos list turn orange. */
+.rowbtns { display: flex; flex-direction: column; gap: 2px; }
+.icon-btn.swap { font-size: 20px; }
+.row.replacing { border-color: #f79009; background: #fffaeb; box-shadow: 0 0 0 2px #fedf89; }
+.row.replacing .icon-btn.swap { background: #f79009; color: #fff; }
+#lib.picking .ph:not(.in-report) .add1 { background: #f79009; }
+.addbar .cancel-swap[hidden], .addbar [hidden] { display: none; }
