@@ -398,3 +398,19 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .star.full.on { font-size: 15px; }
 .star.on[disabled] { opacity: 1; cursor: default; }
 .star[hidden] { display: none; }
+
+/* Action menu: the app's own dropdown with tall rows. */
+.actwrap { position: relative; }
+.actionsel { text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; color: var(--ink); }
+.actionsel .chev { color: var(--blue); font-size: 20px; }
+.actionsel[disabled] .chev { display: none; }
+.actmenu { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 32px rgba(16,24,40,.16); padding: 6px; z-index: 30; }
+.actmenu[hidden] { display: none; }
+.actmenu .grp { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 12px 14px 4px; }
+.actmenu .actopt { display: block; width: 100%; text-align: left; min-height: 56px; padding: 14px 16px; font-size: 18px; font-weight: 600; color: var(--ink); background: transparent; border: 0; border-radius: 10px; cursor: pointer; }
+.actmenu .actopt:hover, .actmenu .actopt:active { background: var(--blue-soft); color: var(--blue); }
+.actmenu .actopt + .actopt { border-top: 1px solid #f1f3f6; border-radius: 0; }
+@media (pointer: coarse) { .actmenu .actopt { min-height: 60px; font-size: 19px; } }
+/* The Add a to-do button sits on the page by itself; the card appears only when the form opens. */
+.tasks .tgroup.bare { background: transparent; border: 0; box-shadow: none; padding: 0 0 4px; }
+.actionsel { background-image: none; padding-right: 14px; }
