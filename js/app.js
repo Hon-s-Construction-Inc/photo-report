@@ -905,7 +905,9 @@
       paintList();
     }).catch(function (e) {
       if (e && e.code === 'auth') return handleError(e);
-      if (state.up) state.up.info = { jobId: jid, tags: [], folders: ['Photos', 'Reports'], failed: true };
+      if (!state.up) return;
+      if (e && (e.code === 'forbidden' || e.code === 'bad_request')) { state.up.blocked = e.message || 'Uploading is not allowed for you.'; paintBar(); return; }
+      state.up.info = { jobId: jid, tags: [], folders: ['Photos', 'Reports'], failed: true };
       toast('Could not load the tags and folders. You can still upload.');
     });
   }
@@ -1108,6 +1110,11 @@
     var prep = count('prep'), done = count('done'), todo = items.filter(isUploadable).length;
     var err = items.filter(function (i) { return i.status === 'error' && i.blob; }).length;
     var status, buttons;
+    if (up.blocked) {
+      status = up.blocked; buttons = '<button class="btn primary" disabled>Upload</button>';
+      bar.innerHTML = '<div class="upstatusline msg">' + esc(status) + '</div><div class="upbtns">' + buttons + '</div>';
+      $$('.pick').forEach(function (l) { l.classList.add('off'); }); return;
+    }
     if (up.busy) {
       status = 'Uploading ' + Math.min(up.run.n + 1, up.run.total) + ' of ' + up.run.total + '...';
       buttons = '<button class="btn primary" disabled>Uploading...</button>';
@@ -1270,9 +1277,9 @@
       case 'upPickJob': {
         var all = up.jobs.concat(up.recent || [], state.myJobs), j = all.filter(function (x) { return x.id === el.dataset.id; })[0];
         if (!j) return;
-        up.job = { id: j.id, name: j.name }; up.info = null; paintJob(); paintBar(); return loadUploadInfo();
+        up.job = { id: j.id, name: j.name }; up.info = null; up.blocked = null; paintJob(); paintBar(); return loadUploadInfo();
       }
-      case 'upChangeJob': up.job = null; up.info = null; paintJob(); paintBar(); return loadRecent();
+      case 'upChangeJob': up.job = null; up.info = null; up.blocked = null; paintJob(); paintBar(); $$('.pick').forEach(function (l) { l.classList.remove('off'); }); return loadRecent();
       case 'upRemove': return removeItems([uid]);
       case 'upTags': return openSheet('tags', [Number(uid)]);
       case 'upFolder': return openSheet('folder', [Number(uid)]);
@@ -1506,7 +1513,11 @@
       if (!state.todos || state.todos.job.id !== job.id) return;
       if (r.jobName) state.todos.job.name = r.jobName;
       state.todos.list = r.tasks; if (state.view === 'todos') renderTodos();
-    }).catch(function (e) { state.todos.list = []; state.todos.failed = (e && e.message) || 'Could not load the list.'; if (state.view === 'todos') renderTodos(); if (e && e.code === 'auth') handleError(e); });
+    }).catch(function (e) {
+      state.todos.list = []; state.todos.failed = (e && e.message) || 'Could not load the list.';
+      state.todos.blocked = !!(e && (e.code === 'forbidden' || e.code === 'bad_request' || e.code === 'no_key' || e.code === 'key_invalid' || e.code === 'key_mismatch'));
+      if (state.view === 'todos') renderTodos(); if (e && e.code === 'auth') handleError(e);
+    });
   }
   function todoHtml(t) {
     var late = !t.done && t.end && t.end < isoToday();
@@ -1527,7 +1538,7 @@
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="todosBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">' + esc(td.job.name) + '</div><div class="small muted">To-do list</div></div>' + starBtn(td.job) + settingsMenu() + '</header>' +
-      '<main class="page tasks"><section class="tgroup">' +
+      '<main class="page tasks">' + (td.blocked ? '<section class="tgroup"><p class="msg">To-do list is not available: ' + esc(td.failed) + '</p></section>' : '<section class="tgroup">' +
       (td.added ? '<div class="added"><b>&#10003; Added to JobTread:</b> ' + esc(td.added) + '<div class="row2"><button class="btn primary" data-act="todoShowAdd">Add another to-do</button><button class="btn" data-act="todosBack">Done</button></div></div>' :
       '<button class="btn primary" data-act="todoShowAdd" id="todoShowAdd"' + (td.add ? ' hidden' : '') + '>+ Add a to-do</button>' +
       '<div class="todoform" id="todoForm"' + (td.add ? '' : ' hidden') + '><label class="small muted" for="todoName">What needs to be done?</label>' +
@@ -1535,8 +1546,8 @@
       '<label class="small muted" for="todoDue">Due (optional)</label><input id="todoDue" type="date">' +
       '<label class="small muted" for="todoNote">Details (optional)</label><textarea id="todoNote" rows="2" placeholder="Where, how many, who to call..."></textarea>' +
       '<button class="btn primary" data-act="todoAdd" id="todoAddBtn">Add to JobTread</button>' +
-      '<p class="small muted">It goes on the job\'s to-do list in JobTread, assigned to you.</p></div>') + '</section>' +
-      '<section class="tgroup">' + body + '</section></main>';
+      '<p class="small muted">It goes on the job\'s to-do list in JobTread, assigned to you.</p></div>') + '</section>') +
+      (td.blocked ? '' : '<section class="tgroup">' + body + '</section>') + '</main>';
     if (td.add) { var n = $('#todoName'); if (n) n.focus(); }
   }
   function addTodo() {
