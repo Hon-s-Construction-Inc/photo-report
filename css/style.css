@@ -386,3 +386,13 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .sec-add { margin-top: 8px; }
 .sec-add .btn.pick.cam { background: var(--blue-soft); color: var(--blue); border: 1px dashed #9cbdea; width: 100%; font-weight: 600; }
 .sec-add .btn.pick.cam:hover { background: #eef1f5; }
+
+/* My jobsite: the x removes a job (after asking). */
+.home #myJobs .jobrow .star.unstar { color: #98a2b3; font-size: 24px; background: transparent; border-color: transparent; }
+.home #myJobs .jobrow .star.unstar:hover { color: var(--red); background: #fef3f2; }
+
+/* + adds to My jobsite, tick means it is there. */
+.star.add { color: var(--blue); border-color: #cfe0f7; background: var(--blue-soft); font-weight: 700; font-size: 24px; line-height: 1; }
+.star.on { color: var(--green); border-color: #abefc6; background: #ecfdf3; font-size: 20px; }
+.star.full { width: auto; font-size: 15px; padding: 0 14px; white-space: nowrap; }
+.star.full.on { font-size: 15px; }
