@@ -175,15 +175,21 @@
   function renderActions() {
     var j = state.pickedJob, sb = $('#selbox'); if (!sb) return;
     sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(j.name) + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
-    var o = function (act, text, perm) { return perm ? '<option value="' + act + '">' + text + '</option>' : ''; };
+    // The app draws its own menu (not the browser's <select>) so each row is tall enough for a gloved finger.
+    var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
     var view = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files')) + o('goGallery', 'Photos', can('photos') || can('report'));
     var up = (canWrite() ? o('goAddTodo', 'Add a to-do', can('todo')) + o('goUpload', 'Upload photos or a file', can('upload')) : '') + o('goReport', 'Photo report (PDF)', can('report'));
     var box = $('#actionBox'); if (!box) return;
     if (!view && !up) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
-    box.innerHTML = '<select id="actionSel" class="actionsel" aria-label="Action"' + (j ? '' : ' disabled') + '>' +
-      '<option value="">' + (j ? 'Choose an action...' : 'Pick a job first') + '</option>' +
-      (view ? '<optgroup label="View">' + view + '</optgroup>' : '') + (up ? '<optgroup label="Upload">' + up + '</optgroup>' : '') + '</select>' +
+    box.innerHTML = '<div class="actwrap"><button id="actionSel" class="actionsel" data-act="actMenu" aria-haspopup="menu" aria-expanded="false"' + (j ? '' : ' disabled') + '>' +
+      (j ? 'Choose an action...' : 'Pick a job first') + '<span class="chev">&#9662;</span></button>' +
+      '<div id="actMenu" class="actmenu" role="menu" hidden>' +
+      (view ? '<div class="grp">View</div>' + view : '') + (up ? '<div class="grp">Upload</div>' + up : '') + '</div></div>' +
       '<p class="small muted">Pick what you want to do with the job you are working on.</p>' + (!canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '');
+  }
+  function toggleActMenu() {
+    var m = $('#actMenu'), b = $('#actionSel'); if (!m || !b || b.disabled) return;
+    var open = m.hidden; closeMenus(); m.hidden = !open; b.setAttribute('aria-expanded', open);
   }
 
   function runAction(act) {
@@ -207,7 +213,10 @@
       (state.isAdmin ? '<button data-act="admin">&#128100; Users and access</button>' : '') +
       '<button data-act="signOut">Sign out</button></div></div>';
   }
-  function closeMenus() { $$('.ddm').forEach(function (m) { m.hidden = true; }); $$('.dd > .btn').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); }); }
+  function closeMenus() {
+    $$('.ddm, .actmenu').forEach(function (m) { m.hidden = true; });
+    $$('.dd > .btn, #actionSel').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
 
   function renderResults() {
     var box = $('#results'); if (!box) return;
@@ -1583,7 +1592,7 @@ function renderEditor() {
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="todosBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">' + esc(td.job.name) + '</div><div class="small muted">To-do list</div></div>' + starBtn(td.job) + settingsMenu() + '</header>' +
-      '<main class="page tasks">' + (td.blocked ? '<section class="tgroup"><p class="msg">To-do list is not available: ' + esc(td.failed) + '</p></section>' : !canWrite() ? '<section class="tgroup"><p class="small msg">' + esc(writeWhy()) + ' You can view the list.</p></section>' : '<section class="tgroup">' +
+      '<main class="page tasks">' + (td.blocked ? '<section class="tgroup"><p class="msg">To-do list is not available: ' + esc(td.failed) + '</p></section>' : !canWrite() ? '<section class="tgroup"><p class="small msg">' + esc(writeWhy()) + ' You can view the list.</p></section>' : '<section class="tgroup' + (td.add || td.added ? '' : ' bare') + '">' +
       (td.added ? '<div class="added"><b>&#10003; Added to JobTread:</b> ' + esc(td.added) + '<div class="row2"><button class="btn primary" data-act="todoShowAdd">Add another to-do</button><button class="btn" data-act="todosBack">Done</button></div></div>' :
       '<button class="btn primary" data-act="todoShowAdd" id="todoShowAdd"' + (td.add ? ' hidden' : '') + '>+ Add a to-do</button>' +
       '<div class="todoform" id="todoForm"' + (td.add ? '' : ' hidden') + '><label class="small muted" for="todoName">What needs to be done?</label>' +
@@ -1685,6 +1694,8 @@ function renderEditor() {
         return setFeatures(pf, $$('.featchk'));
       }
       case 'refreshApp': return refreshApp();
+      case 'actMenu': ev.stopPropagation(); return toggleActMenu();
+      case 'runAct': closeMenus(); return runAction(el.dataset.run);
       case 'shareApp': return shareApp();
       case 'backToSearch': return go('search');
       case 'backToEditor': return go('editor');
@@ -1757,7 +1768,6 @@ function renderEditor() {
     if (t.id === 'fileCam' || t.id === 'fileLib') { addFiles(t.files); t.value = ''; return; }
     if (t.classList && t.classList.contains('camSlot')) { var s1 = t.files && t.files[0], fid1 = t.dataset.fid; t.value = ''; if (s1) shootIntoReport(s1, null, fid1); return; }
     if (t.classList && t.classList.contains('camSec')) { var s2 = t.files && t.files[0], si2 = t.dataset.si; t.value = ''; if (s2) shootIntoReport(s2, si2); return; }
-    if (t.id === 'actionSel') { var act = t.value; t.value = ''; if (act) runAction(act); return; }
     if (t.classList && t.classList.contains('upchk')) { state.up.sel[t.dataset.uid] = t.checked; return paintBulk(); }
     if (t.classList && t.classList.contains('todochk')) return setTodoDone(t.dataset.id, t.checked, t);
     if (t.classList && t.classList.contains('taskchk')) return setTaskDone(t.dataset.id, t.checked, t);
