@@ -60,7 +60,7 @@
     sections: [], entries: {}, report: { title: '', author: '', dateText: '' }, activeSec: null, addNew: false, replacing: null,
     pdf: null, saved: false,
     up: null, myJobs: loadMyJobsCache(),
-    perms: null, isAdmin: false, filesJob: null, filesList: null, tasks: null, admin: null
+    groupBy: 'date', perms: null, isAdmin: false, filesJob: null, filesList: null, tasks: null, admin: null
   };
   // What this person may do here (set by an Admin). Until the server answers, everything shows.
   function can(k) { return !state.perms || state.perms[k] !== false; }
@@ -441,6 +441,7 @@ function renderEditor() {
       settingsMenu() + '</header>' +
       '<div class="editor">' +
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
+      groupSwitch('groupLib') +
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
       '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
       '<div class="lib" id="lib"></div>' +
@@ -483,26 +484,55 @@ function renderEditor() {
     });
   }
 
+  // Grouping for photo grids: by day (default) or by JobTread file tag. A photo with several tags is shown under its
+  // first tag in the company's usual order (Pre-construction, Demolition, In Progress ...); untagged photos come last.
+  function primaryTag(f) {
+    var tags = (f.tags || []).slice();
+    if (!tags.length) return '';
+    tags.sort(function (a, b) {
+      var pa = PRIORITY_TAGS.indexOf(a), pb = PRIORITY_TAGS.indexOf(b);
+      if (pa < 0) pa = 99; if (pb < 0) pb = 99;
+      return pa - pb || a.localeCompare(b);
+    });
+    return tags[0];
+  }
+  function tagRank(t) { if (!t) return 1000; var i = PRIORITY_TAGS.indexOf(t); return i < 0 ? 100 : i; }
+  // Returns [{ key, label, files }] in display order; files inside a group keep the date order passed in.
+  function groupPhotos(files, by) {
+    var groups = [], idx = {};
+    files.forEach(function (f) {
+      var key = by === 'tag' ? primaryTag(f) : dayKey(f.createdAt);
+      if (!Object.prototype.hasOwnProperty.call(idx, key)) {
+        idx[key] = groups.length;
+        groups.push({ key: key, label: by === 'tag' ? (key || 'No tag') : fmtDay(f.createdAt), files: [] });
+      }
+      groups[idx[key]].files.push(f);
+    });
+    if (by === 'tag') groups.sort(function (a, b) { return tagRank(a.key) - tagRank(b.key) || a.key.localeCompare(b.key); });
+    return groups;
+  }
+  function groupSwitch(act) {
+    var tag = state.groupBy === 'tag';
+    return '<div class="seggrp" role="group" aria-label="Group photos by"><button class="seg' + (tag ? '' : ' on') + '" data-act="' + act + '" data-by="date" aria-pressed="' + !tag + '">By date</button>' +
+      '<button class="seg' + (tag ? ' on' : '') + '" data-act="' + act + '" data-by="tag" aria-pressed="' + tag + '">By tag</button></div>';
+  }
+  function headHtml(g) {
+    return '<div class="day' + (state.groupBy === 'tag' ? ' taghead' : '') + '">' + esc(g.label) + '<span>' + g.files.length + ' photo' + (g.files.length === 1 ? '' : 's') + '</span></div>';
+  }
+
   function renderLibrary() {
     var lib = $('#lib'); if (!lib) return;
     var used = usedSet();
-    var sorted = sortedFiles(), perDay = {};
-    sorted.forEach(function (f) { var k = dayKey(f.createdAt); perDay[k] = (perDay[k] || 0) + 1; });
-    var lastDay = null;
-    lib.innerHTML = sorted.map(function (f) {
+    var tagMode = state.groupBy === 'tag';
+    lib.innerHTML = groupPhotos(sortedFiles(), state.groupBy).map(function (g) { return headHtml(g) + g.files.map(function (f) {
       var idx = state.selected.indexOf(f.id);
-      var k = dayKey(f.createdAt), head = '';
-      if (k !== lastDay) {
-        lastDay = k;
-        head = '<div class="day">' + esc(fmtDay(f.createdAt)) + '<span>' + perDay[k] + ' photo' + (perDay[k] === 1 ? '' : 's') + '</span></div>';
-      }
-      return head + '<div class="ph' + (idx > -1 ? ' sel' : '') + (used[f.id] ? ' in-report' : '') + (f.local ? ' local' : '') + '" data-fid="' + esc(f.id) + '" data-act="toggle">' +
+      return '<div class="ph' + (idx > -1 ? ' sel' : '') + (used[f.id] ? ' in-report' : '') + (f.local ? ' local' : '') + '" data-fid="' + esc(f.id) + '" data-act="toggle">' +
         '<img loading="lazy" src="' + esc(f.thumb) + '" alt="' + esc(f.name) + '">' +
         '<span class="num">' + (idx > -1 ? idx + 1 : '') + '</span><span class="used">In report</span>' + (f.local ? '<span class="notjt">Not in JobTread yet</span>' : '') +
         '<button class="add1" data-act="addOne" aria-label="Add this photo to the report">+</button>' +
         '<button class="zoom" data-act="zoom" aria-label="Enlarge">&#10530;</button>' +
         '<span class="when">' + esc(fmtShort(f.createdAt)) + '</span></div>';
-    }).join('');
+    }).join(''); }).join('');
     var s = Sortable.create(lib, {
       group: { name: 'photos', pull: 'clone', put: false }, sort: false, animation: 150, draggable: '.ph',
       delay: 160, delayOnTouchOnly: true, filter: '.zoom, .add1', preventOnFilter: false, onEnd: onLibEnd
@@ -1639,18 +1669,14 @@ function renderEditor() {
   }
   function renderGallery() {
     var g = state.gallery, files = g.files.slice().sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : -1; });
-    var lastDay = null, perDay = {};
-    files.forEach(function (f) { var k = dayKey(f.createdAt); perDay[k] = (perDay[k] || 0) + 1; });
-    var grid = files.map(function (f) {
-      var k = dayKey(f.createdAt), head = '';
-      if (k !== lastDay) { lastDay = k; head = '<div class="day">' + esc(fmtDay(f.createdAt)) + '<span>' + perDay[k] + ' photo' + (perDay[k] === 1 ? '' : 's') + '</span></div>'; }
-      return head + '<button class="gph" data-act="galleryZoom" data-fid="' + esc(f.id) + '"><img loading="lazy" src="' + esc(f.thumb) + '" alt="">' +
+    var grid = groupPhotos(files, state.groupBy).map(function (grp) { return headHtml(grp) + grp.files.map(function (f) {
+      return '<button class="gph" data-act="galleryZoom" data-fid="' + esc(f.id) + '"><img loading="lazy" src="' + esc(f.thumb) + '" alt="">' +
         (f.note ? '<span class="gnote">' + esc(f.note) + '</span>' : '') + '<span class="when">' + esc(fmtShort(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + '</span></button>';
-    }).join('');
+    }).join(''); }).join('');
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="galleryBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">' + esc(g.job.name) + '</div><div class="small muted">' + files.length + ' photos</div></div>' + starBtn(g.job) +
-      (can('report') ? '<button class="btn small primary" data-act="galleryReport">Make a report</button>' : '') + settingsMenu() + '</header>' +
+      groupSwitch('groupGal') + (can('report') ? '<button class="btn small primary" data-act="galleryReport">Make a report</button>' : '') + settingsMenu() + '</header>' +
       '<main class="page gallery">' + (files.length ? '<div class="lib gal">' + grid + '</div>' : '<p class="muted">No photos in this job yet.</p>') + '</main>';
   }
 
@@ -1816,6 +1842,8 @@ function renderEditor() {
         return addToSection([el.closest('.ph').dataset.fid], $('#targetSec').value);
       case 'zoom': ev.stopPropagation(); return showPreview(el.closest('.ph').dataset.fid);
       case 'closePreview': $('#preview').hidden = true; return;
+      case 'groupLib': state.groupBy = el.dataset.by; $$('[data-act=groupLib]').forEach(function (b) { var on = b.dataset.by === state.groupBy; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); return renderLibrary();
+      case 'groupGal': state.groupBy = el.dataset.by; return renderGallery();
       case 'toggleSort': state.sortDesc = !state.sortDesc; el.textContent = state.sortDesc ? 'Newest first' : 'Oldest first'; return renderLibrary();
       case 'clearSel': state.selected = []; return changed();
       case 'addSel': return addToSection(state.selected.slice(), $('#targetSec').value);
