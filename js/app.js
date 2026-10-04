@@ -1688,7 +1688,8 @@ function renderEditor() {
   function destroySortables() { sortables.forEach(function (s) { try { s.destroy(); } catch (e) { /* gone */ } }); sortables = []; }
 
   document.addEventListener('click', function (ev) {
-    if (!ev.target.closest('.dd')) closeMenus();
+    // Menus stay open while a tap lands inside them: iPadOS drops the photo picker if its button is hidden mid-tap.
+    if (!ev.target.closest('.dd, .swapmenu, .actmenu')) closeMenus();
     if (ev.target.id === 'sheet') return closeSheet();
     var inSec = ev.target.closest('#sections .sec');
     if (inSec) setActive(Number(inSec.dataset.sec));
@@ -1749,7 +1750,7 @@ function renderEditor() {
         if (i > -1) state.selected.splice(i, 1); else state.selected.push(fid);
         return changed();
       }
-      case 'swap': {
+      case 'swap': closeMenus(); {
         var fid0 = el.dataset.fid;
         state.replacing = state.replacing === fid0 ? null : fid0;
         renderSections(); refreshBars();
@@ -1811,7 +1812,7 @@ function renderEditor() {
   document.addEventListener('change', function (ev) {
     var t = ev.target;
     if (t.id === 'fileCam' || t.id === 'fileLib') { addFiles(t.files); t.value = ''; return; }
-    if (t.classList && t.classList.contains('camSlot')) { var s1 = t.files && t.files[0], fid1 = t.dataset.fid; t.value = ''; if (s1) shootIntoReport(s1, null, fid1); return; }
+    if (t.classList && t.classList.contains('camSlot')) { var s1 = t.files && t.files[0], fid1 = t.dataset.fid; t.value = ''; closeMenus(); if (s1) shootIntoReport(s1, null, fid1); return; }
     if (t.classList && t.classList.contains('camSec')) { var s2 = t.files && t.files[0], si2 = t.dataset.si; t.value = ''; if (s2) shootIntoReport(s2, si2); return; }
     if (t.classList && t.classList.contains('upchk')) { state.up.sel[t.dataset.uid] = t.checked; return paintBulk(); }
     if (t.classList && t.classList.contains('todochk')) return setTodoDone(t.dataset.id, t.checked, t);
