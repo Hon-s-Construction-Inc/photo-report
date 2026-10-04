@@ -396,3 +396,5 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .star.on { color: var(--green); border-color: #abefc6; background: #ecfdf3; font-size: 20px; }
 .star.full { width: auto; font-size: 15px; padding: 0 14px; white-space: nowrap; }
 .star.full.on { font-size: 15px; }
+.star.on[disabled] { opacity: 1; cursor: default; }
+.star[hidden] { display: none; }
