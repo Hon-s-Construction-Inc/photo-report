@@ -240,7 +240,8 @@
 
   /* ------------------------------------------------------------------ My jobs (each person's own short list) */
   var MY_JOBS_KEY = 'hci_pr_myjobs';
-  function loadMyJobsCache() { try { return sortMyJobs(JSON.parse(localStorage.getItem(MY_JOBS_KEY) || '[]') || []); } catch (e) { return []; } }
+  // Called while the state is being built, before MY_JOBS_KEY is assigned, so the key is written out here.
+  function loadMyJobsCache() { try { return sortMyJobs(JSON.parse(localStorage.getItem('hci_pr_myjobs') || '[]') || []); } catch (e) { return []; } }
   function cacheMyJobs() { try { localStorage.setItem(MY_JOBS_KEY, JSON.stringify(state.myJobs)); } catch (e) { /* full */ } }
   function myJob(id) { return state.myJobs.filter(function (j) { return j.id === id; })[0] || null; }
   // My jobsite order: house number first (as a number), then the street name A to Z.
@@ -261,8 +262,15 @@
     return '<button class="star' + (on ? ' on' : '') + '" data-act="star" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Remove from My jobs' : 'Add to My jobs') + '" title="My jobs">' + (on ? '&#9733;' : '&#9734;') + '</button>';
   }
   // The list lives on the server (per email), so every device shows the same one. A copy is kept here for instant display.
+  // Merge the server's list with this device's copy. Nothing is ever dropped by an upgrade or a sign-in on another
+  // device: a job on either side stays, and the merged list is written back if the server was missing any.
   function syncMyJobs() {
-    API.call('getMyJobs').then(function (r) { state.myJobs = sortMyJobs(r.jobs || []); cacheMyJobs(); paintStars(); }).catch(function () { /* keep the cached copy */ });
+    API.call('getMyJobs').then(function (r) {
+      var server = r.jobs || [], seen = {}, merged = [];
+      server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '' }); } });
+      state.myJobs = sortMyJobs(merged); cacheMyJobs(); paintStars();
+      if (merged.length > server.length) API.call('setMyJobs', { jobs: state.myJobs }).catch(function () { /* next time */ });
+    }).catch(function () { /* keep the cached copy */ });
   }
   function saveMyJobs() {
     cacheMyJobs(); paintStars();
