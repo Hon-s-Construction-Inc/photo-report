@@ -64,7 +64,10 @@
   };
   // What this person may do here (set by an Admin). Until the server answers, everything shows.
   function can(k) { return !state.perms || state.perms[k] !== false; }
-  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; } }
+  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; } if (r && r.write) state.write = r.write; }
+  // Can this person save to JobTread right now? Unknown until the server says; then every write control follows it.
+  function canWrite() { return !state.write || state.write.ok !== false; }
+  function writeWhy() { return (state.write && state.write.message) || 'Saving to JobTread is not available for you yet.'; }
   var sortables = [];
 
   /* ------------------------------------------------------------------ routing */
@@ -174,13 +177,13 @@
     sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(j.name) + starBtn(j) : 'Find a job above, or tap one under My jobsite') + '</div>';
     var o = function (act, text, perm) { return perm ? '<option value="' + act + '">' + text + '</option>' : ''; };
     var view = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files')) + o('goGallery', 'Photos', can('photos') || can('report'));
-    var up = o('goAddTodo', 'Add a to-do', can('todo')) + o('goUpload', 'Upload photos or a file', can('upload')) + o('goReport', 'Photo report (PDF)', can('report'));
+    var up = (canWrite() ? o('goAddTodo', 'Add a to-do', can('todo')) + o('goUpload', 'Upload photos or a file', can('upload')) : '') + o('goReport', 'Photo report (PDF)', can('report'));
     var box = $('#actionBox'); if (!box) return;
     if (!view && !up) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
     box.innerHTML = '<select id="actionSel" class="actionsel" aria-label="Action"' + (j ? '' : ' disabled') + '>' +
       '<option value="">' + (j ? 'Choose an action...' : 'Pick a job first') + '</option>' +
       (view ? '<optgroup label="View">' + view + '</optgroup>' : '') + (up ? '<optgroup label="Upload">' + up + '</optgroup>' : '') + '</select>' +
-      '<p class="small muted">Pick what you want to do with the job you are working on.</p>';
+      '<p class="small muted">Pick what you want to do with the job you are working on.</p>' + (!canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '');
   }
 
   function runAction(act) {
@@ -395,7 +398,7 @@
       settingsMenu() + '</header>' +
       '<div class="editor">' +
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
-      (can('upload') ? '<label class="btn small primary pick cam"><span>&#128247; Take photo</span><input id="camShot" type="file" accept="image/*" capture="environment"></label>' : '') +
+      (can('upload') && canWrite() ? '<label class="btn small primary pick cam"><span>&#128247; Take photo</span><input id="camShot" type="file" accept="image/*" capture="environment"></label>' : '') +
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
       '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
       '<div class="lib" id="lib"></div>' +
@@ -812,7 +815,7 @@
       '<button class="btn primary" data-act="share">Email / Share</button>' +
       '<a class="btn" style="text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center" href="' + esc(p.url) + '" target="_blank" rel="noopener">Open preview</a>' +
       '<button class="btn" data-act="download">Download</button>' +
-      (can('saveJT') ? '<button class="btn" data-act="saveJT" id="saveBtn"' + (state.saved ? ' disabled' : '') + '>' + (state.saved ? 'Saved to JobTread' : 'Save to JobTread (Reports folder)') + '</button>' : '') +
+      (can('saveJT') ? '<button class="btn" data-act="saveJT" id="saveBtn"' + (state.saved || !canWrite() ? ' disabled' : '') + '>' + (state.saved ? 'Saved to JobTread' : 'Save to JobTread (Reports folder)') + '</button>' + (!canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') : '') +
       '<button class="btn cancel" data-act="backToEditor">Cancel</button>' +
       '</div><p id="msg" class="msg"></p></div></main>';
   }
@@ -885,6 +888,7 @@
     var keep = state.up && state.up.items.length && (!job || !state.up.job || state.up.job.id === job.id);
     if (keep) { state.up.from = from; if (job && !state.up.job) state.up.job = { id: job.id, name: job.name }; }
     else { freeUp(); state.up = newUp(job, from); }
+    if (!canWrite()) state.up.blocked = writeWhy();
     state.view = 'upload'; render();
     if (state.up.job) loadUploadInfo(); else loadRecent();
   }
@@ -1277,9 +1281,9 @@
       case 'upPickJob': {
         var all = up.jobs.concat(up.recent || [], state.myJobs), j = all.filter(function (x) { return x.id === el.dataset.id; })[0];
         if (!j) return;
-        up.job = { id: j.id, name: j.name }; up.info = null; up.blocked = null; paintJob(); paintBar(); return loadUploadInfo();
+        up.job = { id: j.id, name: j.name }; up.info = null; up.blocked = canWrite() ? null : writeWhy(); paintJob(); paintBar(); return loadUploadInfo();
       }
-      case 'upChangeJob': up.job = null; up.info = null; up.blocked = null; paintJob(); paintBar(); $$('.pick').forEach(function (l) { l.classList.remove('off'); }); return loadRecent();
+      case 'upChangeJob': up.job = null; up.info = null; up.blocked = canWrite() ? null : writeWhy(); paintJob(); paintBar(); $$('.pick').forEach(function (l) { l.classList.remove('off'); }); return loadRecent();
       case 'upRemove': return removeItems([uid]);
       case 'upTags': return openSheet('tags', [Number(uid)]);
       case 'upFolder': return openSheet('folder', [Number(uid)]);
@@ -1386,7 +1390,7 @@
   function taskHtml(t) {
     var late = !t.done && t.end && t.end < isoToday();
     return '<div class="task' + (t.done ? ' done' : '') + (late ? ' late' : '') + '" data-tid="' + esc(t.id) + '">' +
-      '<input type="checkbox" class="taskchk" data-id="' + esc(t.id) + '" aria-label="Done"' + (t.done ? ' checked' : '') + '>' +
+      '<input type="checkbox" class="taskchk" data-id="' + esc(t.id) + '" aria-label="Done"' + (t.done ? ' checked' : '') + (canWrite() ? '' : ' disabled') + '>' +
       '<div class="tbody"><div class="tname">' + esc(t.name) + '</div>' +
       '<div class="sub">' + (t.end ? (late ? 'Was due ' : 'Due ') + esc(fmtShort(t.end + 'T12:00:00')) : 'No date') + (t.start && t.start !== t.end ? ' &middot; starts ' + esc(fmtShort(t.start + 'T12:00:00')) : '') + (t.todo ? ' &middot; To-do' : '') + '</div>' +
       (t.note ? '<button class="link small tnote" data-act="taskNote">Details</button><div class="tdesc">' + esc(t.note).replace(/\n/g, '<br>') + '</div>' : '') +
@@ -1409,7 +1413,7 @@
       '<header class="topbar"><button class="btn small" data-act="tasksBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">My tasks</div></div>' +
       '<button class="btn small" data-act="tasks">&#8635; Reload</button></header>' +
-      '<main class="page tasks"><p class="muted small">Tasks assigned to you in JobTread. Tick a box to mark it done.</p>' + body + '</main>';
+      '<main class="page tasks"><p class="muted small">Tasks assigned to you in JobTread. ' + (canWrite() ? 'Tick a box to mark it done.' : esc(writeWhy())) + '</p>' + body + '</main>';
   }
   function setTaskDone(id, done, box) {
     var t = (state.tasks || []).filter(function (x) { return x.id === id; })[0]; if (!t) return;
@@ -1522,7 +1526,7 @@
   function todoHtml(t) {
     var late = !t.done && t.end && t.end < isoToday();
     return '<div class="task' + (t.done ? ' done' : '') + (late ? ' late' : '') + '">' +
-      '<input type="checkbox" class="taskchk todochk" data-id="' + esc(t.id) + '" aria-label="Done"' + (t.done ? ' checked' : '') + '>' +
+      '<input type="checkbox" class="taskchk todochk" data-id="' + esc(t.id) + '" aria-label="Done"' + (t.done ? ' checked' : '') + (canWrite() ? '' : ' disabled') + '>' +
       '<div class="tbody"><div class="tname">' + esc(t.name) + '</div>' +
       '<div class="sub">' + (t.end ? (late ? 'Was due ' : 'Due ') + esc(fmtShort(t.end + 'T12:00:00')) : 'No date') + (t.who && t.who.length ? ' &middot; ' + esc(t.who.join(', ')) : '') + '</div>' +
       (t.note ? '<div class="tdesc" style="display:block">' + esc(t.note).replace(/\n/g, '<br>') + '</div>' : '') + '</div></div>';
@@ -1538,7 +1542,7 @@
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="todosBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">' + esc(td.job.name) + '</div><div class="small muted">To-do list</div></div>' + starBtn(td.job) + settingsMenu() + '</header>' +
-      '<main class="page tasks">' + (td.blocked ? '<section class="tgroup"><p class="msg">To-do list is not available: ' + esc(td.failed) + '</p></section>' : '<section class="tgroup">' +
+      '<main class="page tasks">' + (td.blocked ? '<section class="tgroup"><p class="msg">To-do list is not available: ' + esc(td.failed) + '</p></section>' : !canWrite() ? '<section class="tgroup"><p class="small msg">' + esc(writeWhy()) + ' You can view the list.</p></section>' : '<section class="tgroup">' +
       (td.added ? '<div class="added"><b>&#10003; Added to JobTread:</b> ' + esc(td.added) + '<div class="row2"><button class="btn primary" data-act="todoShowAdd">Add another to-do</button><button class="btn" data-act="todosBack">Done</button></div></div>' :
       '<button class="btn primary" data-act="todoShowAdd" id="todoShowAdd"' + (td.add ? ' hidden' : '') + '>+ Add a to-do</button>' +
       '<div class="todoform" id="todoForm"' + (td.add ? '' : ' hidden') + '><label class="small muted" for="todoName">What needs to be done?</label>' +
