@@ -445,7 +445,7 @@ function renderEditor() {
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
       groupSwitch('groupLib') +
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
-      '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
+      '<button class="btn small" data-act="clearSel"><span class="long">Clear selection</span><span class="short">Clear</span></button></header>' +
       '<div class="lib" id="lib"></div>' +
       '<div class="addbar"><span id="selCount" class="small muted">Tap + to add a photo to the highlighted section.</span>' +
       '<label class="small muted" for="targetSec">Add to</label><select id="targetSec" aria-label="Add to section"></select>' +

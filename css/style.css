@@ -452,3 +452,36 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 /* Admin switches grouped by place. */
 .pgroup { margin-top: 8px; }
 .pgroup .pgt { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
+
+/* ---------- Phones: two-row top bar and a roomier photo picker ---------- */
+.short { display: none; }
+@media (max-width: 600px) {
+  .long { display: none; } .short { display: inline; }
+  /* Row 1: Back, job name, Settings. Row 2: the page's own buttons. */
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .topbar > .btn:first-child { order: 0; }
+  .topbar > .grow { order: 1; flex: 1 1 calc(100% - 240px); }
+  .topbar > .dd { order: 2; }
+  .topbar > *:not(.btn:first-child):not(.grow):not(.dd) { order: 3; }
+  .topbar .btn { white-space: nowrap; }
+  .topbar > .small.muted:not(.userName) { display: none; }   /* "244 photos" - shown in the panel instead */
+  .topbar > .seggrp { flex: 1 1 auto; }
+  .topbar > .seggrp .seg { flex: 1; }
+  .topbar > .btn.primary, .topbar > [data-act=galleryUpload] { flex: 1 1 auto; }
+  /* Report editor photo panel: one compact row of controls, a short add bar. */
+  body.editing .editor > .panel > header { gap: 6px; }
+  body.editing .editor > .panel:first-child > header h2 { flex: 1 1 100%; font-size: 15px; margin: 0; }
+  body.editing .editor > .panel:last-child > header { flex-wrap: nowrap; }
+  body.editing .editor > .panel:first-child > header .seggrp { flex: 1 1 auto; }
+  body.editing .editor > .panel:first-child > header .seggrp .seg { flex: 1; padding: 6px 8px; }
+  body.editing .addbar #selCount, body.editing .addbar label[for=targetSec] { display: none; }
+  body.editing .addbar { flex-wrap: nowrap; gap: 6px; }
+  body.editing .addbar select { min-width: 0; }
+  body.editing .addbar .btn { white-space: nowrap; padding-left: 10px; padding-right: 10px; }
+  body.editing .editor > .panel .lib { grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; }
+  .gal { grid-template-columns: repeat(3, 1fr) !important; gap: 6px; }
+  .fstrip { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ftile { min-height: 64px; padding: 10px 8px; text-align: center; place-content: center; }
+  .ftile b { font-size: 15px; }
+  .ftile span { display: none; }
+}
