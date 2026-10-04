@@ -177,9 +177,10 @@
     sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(j.name) + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
     // The app draws its own menu (not the browser's <select>) so each row is tall enough for a gloved finger.
     var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
-    // Two places only, each for looking AND adding: the To-do list (+ Add a to-do) and Files & plans
-    // (plans and files, job photos, upload, photo report).
-    var items = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files &amp; plans', canFilesPlace());
+    // Three places, each for looking AND adding: To-do list (+ Add a to-do), Files and plans (Upload),
+    // Photos (Upload photos, Make a report).
+    var items = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload')) +
+      o('goGallery', 'Photos', can('photos') || can('report') || can('upload'));
     var box = $('#actionBox'); if (!box) return;
     if (!items) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
     box.innerHTML = '<div class="actwrap"><button id="actionSel" class="actionsel" data-act="actMenu" aria-haspopup="menu" aria-expanded="false"' + (j ? '' : ' disabled') + '>' +
@@ -193,7 +194,6 @@
     var open = m.hidden; closeMenus(); m.hidden = !open; b.setAttribute('aria-expanded', open);
   }
 
-  function canFilesPlace() { return can('files') || can('photos') || can('report') || can('upload'); }
   function runAction(act) {
     var j = state.pickedJob; if (!j) return toast('Pick a job first.');
     switch (act) {
@@ -1556,9 +1556,10 @@ function renderEditor() {
       settingsMenu() + '</header>' +
       '<main class="page files"><div class="fstrip">' +
       (can('photos') || can('report') ? '<button class="ftile" data-act="filesPhotos"><b>&#128247; Photos</b><span>See the job photos, by date or by tag</span></button>' : '') +
-      (can('upload') && canWrite() ? '<button class="ftile" data-act="filesUpload"><b>&#8679; Upload</b><span>Photos or files from this device, with comments</span></button>' : '') +
+      (can('upload') && canWrite() ? '<button class="ftile" data-act="filesUpload"><b>&#8679; Upload</b><span>Plans, PDFs or photos from this device, with comments</span></button>' : '') +
       (can('report') ? '<button class="ftile primary" data-act="filesReport"><b>&#128196; Photo report</b><span>Build a before/after PDF</span></button>' : '') +
-      '</div>' + (can('upload') && !canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') +
+      '</div>' +
+      (can('upload') && !canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') +
       (r && !r.off ? '<div class="lab">Plans and files</div>' : '') + body + '</main>';
   }
   function openFileLink(fid) {
@@ -1620,7 +1621,8 @@ function renderEditor() {
   // The admin switches follow the app's two places. Server keys stay the same; this only groups and words them.
   var PERM_GROUPS = [
     { title: 'To-do list', keys: ['todo'] },
-    { title: 'Files &amp; plans', keys: ['files', 'costFiles', 'photos', 'upload', 'report', 'saveJT'] },
+    { title: 'Files and plans', keys: ['files', 'costFiles'] },
+    { title: 'Photos', keys: ['photos', 'upload', 'report', 'saveJT'] },
     { title: 'Top bar', keys: ['tasks'] }
   ];
   var PERM_WORDS = {
@@ -1786,7 +1788,8 @@ function renderEditor() {
       '<h1>How to use the app</h1>' +
       '<h2>1. Pick the job</h2><p>Type the house number in <b>Find job</b>, or tap a job under <b>My jobsite</b>. Tap <b>+</b> on a found job to keep it in My jobsite; tap &times; in the list to remove it.</p>' +
       '<h2>2. To-do list</h2><p>This job\'s to-dos: tick to mark done, or <b>+ Add a to-do</b>.</p>' +
-      '<h2>3. Files &amp; plans</h2><p><b>Photos</b>: browse the job photos by date or by tag. <b>Upload</b>: photos or PDFs from this device with a comment, tags and a folder. <b>Photo report</b>: pick photos, arrange them, make the PDF, email it or save it into JobTread. Below those, tap any plan or file to open it.</p>' +
+      '<h2>3. Files and plans</h2><p>Everything in one place: <b>Photos</b>, <b>Upload</b> and <b>Photo report</b> on top, then tap any plan or file to open it.</p>' +
+      '<h2>4. Photos</h2><p>Browse the job photos by date or by tag. <b>Upload photos</b> adds photos from this device; <b>Make a report</b> builds the before/after PDF.</p>' +
       '<h2>My tasks</h2><p>Everything assigned to you in JobTread, across all jobs. Tick to mark done.</p>' +
       '<h2>Photos from your iPad in a report</h2><p>In a report, tap <b>&#8646;</b> on a slot or <b>+ Add photo to this section</b> to take a picture or pick one from your Photos. It stays on the device until you tap <b>Generate PDF</b>; the app then asks whether to save those new photos to the job in JobTread. Say No if one was a mistake, remove it with &times;, and generate again.</p>' +
       '<h2>Share the app with a co-worker</h2><p>Settings &rsaquo; <b>Share this app</b> sends the link by Messages, Mail or AirDrop (or copies it). They sign in with their own work email; an Admin sets what they can do.</p>' +
