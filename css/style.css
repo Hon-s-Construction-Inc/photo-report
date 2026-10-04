@@ -432,3 +432,11 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 /* Device photos that are not in JobTread yet. */
 .ph .notjt { position: absolute; top: 4px; left: 4px; font-size: 10px; font-weight: 700; background: rgba(247,144,9,.95); color: #fff; padding: 1px 6px; border-radius: 999px; }
 .notjt-txt { color: #b54708; font-weight: 700; }
+
+/* By date / By tag switch over photo grids. */
+.seggrp { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.seggrp .seg { border: 0; border-radius: 0; background: #fff; padding: 6px 12px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; min-height: 36px; }
+.seggrp .seg + .seg { border-left: 1px solid var(--line); }
+.seggrp .seg.on { background: var(--blue-soft); color: var(--blue); }
+@media (pointer: coarse) { .seggrp .seg { min-height: 44px; padding: 8px 14px; } }
+.day.taghead { color: var(--blue); }
