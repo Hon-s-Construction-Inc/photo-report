@@ -165,7 +165,7 @@
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div>' +
-      '<div class="cols"><section class="col"><div class="lab">My jobsite <span class="small muted">(tap &#9734; on a job to keep it here)</span></div><div id="myJobs"></div></section>' +
+      '<div class="cols"><section class="col"><div class="lab">My jobsite <span class="small muted">(tap + on a found job to keep it here; &times; removes it)</span></div><div id="myJobs"></div></section>' +
       '<section class="col act"><div class="lab">Action</div><div id="actionBox"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
@@ -174,7 +174,7 @@
   // The right-hand half of the home screen: the selected job, then View / Upload buttons (only the ones this person may use).
   function renderActions() {
     var j = state.pickedJob, sb = $('#selbox'); if (!sb) return;
-    sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(j.name) + starBtn(j) : 'Find a job above, or tap one under My jobsite') + '</div>';
+    sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(j.name) + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
     var o = function (act, text, perm) { return perm ? '<option value="' + act + '">' + text + '</option>' : ''; };
     var view = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files')) + o('goGallery', 'Photos', can('photos') || can('report'));
     var up = (canWrite() ? o('goAddTodo', 'Add a to-do', can('todo')) + o('goUpload', 'Upload photos or a file', can('upload')) : '') + o('goReport', 'Photo report (PDF)', can('report'));
@@ -257,11 +257,14 @@
     });
   }
   function isMyJob(id) { return !!myJob(id); }
-  function starBtn(j) {
+  // Add / in-list control. "+" adds the job to My jobsite; once it is there the control shows a tick and tapping it
+  // asks before removing. full=true writes the words out (used on the Working on line).
+  function starBtn(j, full) {
     if (!j || !j.id) return '';
     var on = isMyJob(j.id);
-    return '<button class="star' + (on ? ' on' : '') + '" data-act="star" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-pressed="' + on + '" aria-label="' + (on ? 'Remove from My jobs' : 'Add to My jobs') + '" title="My jobs">' + (on ? '&#9733;' : '&#9734;') + '</button>';
+    return '<button class="star' + (on ? ' on' : ' add') + (full ? ' full' : '') + '" data-act="' + (on ? 'unstar' : 'star') + '" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" data-full="' + (full ? 1 : 0) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'In My jobsite (tap to remove)' : 'Add to My jobsite') + '" title="' + (on ? 'In My jobsite' : 'Add to My jobsite') + '">' + starText(on, full) + '</button>';
   }
+  function starText(on, full) { return on ? (full ? '&#10003; In My jobsite' : '&#10003;') : (full ? '+ Add to My jobsite' : '+'); }
   // The list lives on the server (per email), so every device shows the same one. A copy is kept here for instant display.
   // Merge the server's list with this device's copy. Nothing is ever dropped by an upgrade or a sign-in on another
   // device: a job on either side stays, and the merged list is written back if the server was missing any.
@@ -278,7 +281,7 @@
     API.call('setMyJobs', { jobs: state.myJobs }).catch(function (e) { if (e && e.code === 'auth') handleError(e); else toast('Could not save My jobs to the server. It is kept on this device.'); });
   }
   function toggleMyJob(id, name) {
-    if (isMyJob(id)) { state.myJobs = state.myJobs.filter(function (j) { return j.id !== id; }); toast('Removed from My jobs.'); }
+    if (isMyJob(id)) { state.myJobs = state.myJobs.filter(function (j) { return j.id !== id; }); toast('Removed from My jobsite.'); }
     else {
       if (state.myJobs.length >= 30) return toast('My jobs holds up to 30 jobs. Remove one first.');
       state.myJobs.push({ id: id, name: name || (state.pickedJob && state.pickedJob.id === id ? state.pickedJob.name : '') });
@@ -287,9 +290,10 @@
     saveMyJobs();
   }
   function paintStars() {
-    $$('.star').forEach(function (b) {
-      var on = isMyJob(b.dataset.id);
-      b.classList.toggle('on', on); b.innerHTML = on ? '&#9733;' : '&#9734;'; b.setAttribute('aria-pressed', on);
+    $$('.star:not(.unstar)').forEach(function (b) {
+      var on = isMyJob(b.dataset.id), full = b.dataset.full === '1';
+      b.classList.toggle('on', on); b.classList.toggle('add', !on); b.innerHTML = starText(on, full); b.setAttribute('aria-pressed', on);
+      b.dataset.act = on ? 'unstar' : 'star'; b.title = on ? 'In My jobsite' : 'Add to My jobsite';
     });
     renderMyJobs(); renderActions();
     if (state.view === 'upload' && state.up && !state.up.job) paintJobResults();
@@ -299,7 +303,8 @@
     if (!state.myJobs.length) { box.innerHTML = '<p class="small muted">No jobs marked yet.</p>'; return; }
     box.innerHTML = '<div class="results">' + state.myJobs.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
-      return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(j.name) + '</span></button></div>';
+      var x = '<button class="star unstar" data-act="unstar" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-label="Remove from My jobsite" title="Remove from My jobsite">&times;</button>';
+      return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(j.name) + '</span></button></div>';
     }).join('') + '</div>';
   }
 
@@ -422,11 +427,9 @@ function renderEditor() {
       '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div>' +
       '<span class="small muted">' + state.files.length + ' photos</span>' + starBtn(state.job) +
       (can('files') ? '<button class="btn small" data-act="editorFiles">Files</button>' : '') +
-      (can('upload') ? '<button class="btn small" data-act="openUpload">&#8679; Upload</button>' : '') +
       settingsMenu() + '</header>' +
       '<div class="editor">' +
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
-      (can('upload') && canWrite() ? '<label class="btn small primary pick cam"><span>&#128247; Take or choose photo</span><input id="camShot" type="file" accept="image/*"></label>' : '') +
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
       '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
       '<div class="lib" id="lib"></div>' +
@@ -1658,7 +1661,8 @@ function renderEditor() {
       case 'todoAdd': return addTodo();
       case 'todoShowAdd': if (state.todos && state.todos.added) { state.todos.added = null; state.todos.add = true; renderTodos(); return; } $('#todoForm').hidden = false; $('#todoShowAdd').hidden = true; $('#todoName').focus(); return;
       case 'pull': return pullPhotos();
-      case 'star': ev.stopPropagation(); return toggleMyJob(el.dataset.id, el.dataset.name);
+      case 'star': ev.stopPropagation(); if (!isMyJob(el.dataset.id)) toggleMyJob(el.dataset.id, el.dataset.name); return;
+      case 'unstar': ev.stopPropagation(); if (isMyJob(el.dataset.id) && confirm('Remove "' + (el.dataset.name || 'this job') + '" from My jobsite?')) toggleMyJob(el.dataset.id, el.dataset.name); return;
       case 'myPhotos': return pullJob(myJob(el.dataset.id));
       case 'myUpload': return openUpload(myJob(el.dataset.id), 'search');
       case 'myFiles': return openFiles(myJob(el.dataset.id), 'search');
@@ -1749,7 +1753,6 @@ function renderEditor() {
   document.addEventListener('change', function (ev) {
     var t = ev.target;
     if (t.id === 'fileCam' || t.id === 'fileLib') { addFiles(t.files); t.value = ''; return; }
-    if (t.id === 'camShot') { var shot = t.files && t.files[0]; t.value = ''; if (shot) shootIntoReport(shot); return; }
     if (t.classList && t.classList.contains('camSlot')) { var s1 = t.files && t.files[0], fid1 = t.dataset.fid; t.value = ''; if (s1) shootIntoReport(s1, null, fid1); return; }
     if (t.classList && t.classList.contains('camSec')) { var s2 = t.files && t.files[0], si2 = t.dataset.si; t.value = ''; if (s2) shootIntoReport(s2, si2); return; }
     if (t.id === 'actionSel') { var act = t.value; t.value = ''; if (act) runAction(act); return; }
@@ -1800,5 +1803,5 @@ function renderEditor() {
   start();
 
   // exposed for tests
-  window.__app = { state: state };
+  window.__app = { state: state, openUpload: openUpload };
 })();
