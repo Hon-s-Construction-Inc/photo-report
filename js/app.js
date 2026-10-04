@@ -203,6 +203,7 @@
     return '<div class="dd"><button class="btn small" data-act="menu" aria-haspopup="true" aria-expanded="false">&#9881; Settings &#9662;</button>' +
       '<div class="ddm" hidden><button data-act="refreshApp">&#8635; Refresh (get the newest version)</button>' +
       '<button data-act="help">? Help</button>' +
+      '<button data-act="shareApp">&#128279; Share this app</button>' +
       (state.isAdmin ? '<button data-act="admin">&#128100; Users and access</button>' : '') +
       '<button data-act="signOut">Sign out</button></div></div>';
   }
@@ -396,7 +397,26 @@
     location.href = location.pathname + '?r=' + Date.now() + (inJob ? '&job=' + encodeURIComponent(state.job.id) : '');
   }
 
-  function renderEditor() {
+  // Share the app's link (share sheet on iPad/phone, otherwise copy to the clipboard). Only the link is shared,
+// never a sign-in; the other person signs in with their own work email.
+function appLink() { return location.origin + location.pathname; }
+function shareApp() {
+  var url = appLink(), text = 'HCI JobTread App - sign in with your work email: ' + url;
+  if (navigator.share) {
+    navigator.share({ title: 'HCI JobTread App', text: 'Sign in with your work email.', url: url })
+      .catch(function (e) { if (e && e.name !== 'AbortError') copyLink(url); });
+    return;
+  }
+  copyLink(url, text);
+}
+function copyLink(url) {
+  var done = function () { toast('Link copied: ' + url); };
+  var fail = function () { window.prompt('Copy this link:', url); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, fail);
+  else fail();
+}
+
+function renderEditor() {
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="backToSearch">&larr; Jobs</button>' +
       '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div>' +
@@ -406,7 +426,7 @@
       settingsMenu() + '</header>' +
       '<div class="editor">' +
       '<section class="panel" aria-label="Photos"><header><h2 class="grow">Photos</h2>' +
-      (can('upload') && canWrite() ? '<label class="btn small primary pick cam"><span>&#128247; Take photo</span><input id="camShot" type="file" accept="image/*" capture="environment"></label>' : '') +
+      (can('upload') && canWrite() ? '<label class="btn small primary pick cam"><span>&#128247; Take or choose photo</span><input id="camShot" type="file" accept="image/*"></label>' : '') +
       '<button class="btn small" data-act="toggleSort">' + (state.sortDesc ? 'Newest first' : 'Oldest first') + '</button>' +
       '<button class="btn small" data-act="clearSel">Clear selection</button></header>' +
       '<div class="lib" id="lib"></div>' +
@@ -491,7 +511,7 @@
         '<button class="icon-btn" data-act="secDel" data-si="' + si + '" aria-label="Delete section">&times;</button></div></div>' +
         '<div class="sec-note"><input class="sec-note-in" data-si="' + si + '" placeholder="Description (optional)" value="' + esc(sec.note) + '" aria-label="Section description"></div>' +
         '<ul class="sec-list' + (side ? ' side' : '') + '" data-sec="' + si + '">' + sec.fids.map(rowHtml).join('') + '</ul>' +
-        (canShoot() ? '<div class="sec-add"><label class="btn small pick cam sec-cam" title="Take a photo and add it to this section"><span>+ &#128247; Take photo for this section</span><input type="file" class="camSec" data-si="' + si + '" accept="image/*" capture="environment"></label></div>' : '') +
+        (canShoot() ? '<div class="sec-add"><label class="btn small pick cam sec-cam" title="Take or choose a photo and add it to this section"><span>+ &#128247; Add photo to this section</span><input type="file" class="camSec" data-si="' + si + '" accept="image/*"></label></div>' : '') +
         '</div>';
     }).join('');
     $$('.sec-list', box).forEach(function (ul) {
@@ -511,7 +531,7 @@
     var f = state.byId[fid]; if (!f) return '';
     var e = entry(fid);
     var mode = labelMode(e);
-    var cam = canShoot() ? '<label class="icon-btn cam-slot" title="Take a new photo for this slot" aria-label="Take a new photo for this slot"><span>&#128247;</span><input type="file" class="camSlot" data-fid="' + esc(fid) + '" accept="image/*" capture="environment"></label>' : '';
+    var cam = canShoot() ? '<label class="icon-btn cam-slot" title="Take or choose a new photo for this slot" aria-label="Take or choose a new photo for this slot"><span>&#128247;</span><input type="file" class="camSlot" data-fid="' + esc(fid) + '" accept="image/*"></label>' : '';
     return '<li class="row' + (state.replacing === fid ? ' replacing' : '') + '" data-fid="' + esc(fid) + '">' +
       '<img class="thumb" src="' + esc(f.thumb) + '" alt="">' +
       '<div class="meta"><div class="slot"></div><select class="lbl-sel" data-fid="' + esc(fid) + '" aria-label="Photo label">' +
@@ -1599,6 +1619,7 @@
       '<h2>2. View</h2><p><b>To-do list</b>: this job\'s to-dos; tick to mark done. <b>Files and plans</b>: tap a file to open it. <b>Photos</b>: browse the job photos; tap one to enlarge.</p>' +
       '<h2>3. Upload</h2><p><b>To-do</b>: add a to-do to the job. <b>Photos or file</b>: take a photo or choose photos/PDFs, add a comment, tags and a folder, then Upload. <b>Photo report</b>: pick photos, arrange them, make the PDF, email it or save it into JobTread.</p>' +
       '<h2>My tasks</h2><p>Everything assigned to you in JobTread, across all jobs. Tick to mark done.</p>' +
+      '<h2>Share the app with a co-worker</h2><p>Settings &rsaquo; <b>Share this app</b> sends the link by Messages, Mail or AirDrop (or copies it). They sign in with their own work email; an Admin sets what they can do.</p>' +
       '<h2>Something looks old or broken?</h2><p>Settings &rsaquo; <b>Refresh</b> loads the newest version. Your unfinished report comes back by itself.</p>' +
       '<h2>Signing in</h2><p>Use your work email. A 6-digit code arrives by email; it works for 10 minutes. You stay signed in for 12 hours.</p>' +
       '<h2>Can\'t save or upload?</h2><p>Your JobTread key is not set up yet. Ask Jason.</p>' +
@@ -1658,6 +1679,7 @@
         return setFeatures(pf, $$('.featchk'));
       }
       case 'refreshApp': return refreshApp();
+      case 'shareApp': return shareApp();
       case 'backToSearch': return go('search');
       case 'backToEditor': return go('editor');
       case 'toggle': {
