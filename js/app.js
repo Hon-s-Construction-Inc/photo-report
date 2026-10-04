@@ -496,9 +496,9 @@ function renderEditor() {
         lastDay = k;
         head = '<div class="day">' + esc(fmtDay(f.createdAt)) + '<span>' + perDay[k] + ' photo' + (perDay[k] === 1 ? '' : 's') + '</span></div>';
       }
-      return head + '<div class="ph' + (idx > -1 ? ' sel' : '') + (used[f.id] ? ' in-report' : '') + '" data-fid="' + esc(f.id) + '" data-act="toggle">' +
+      return head + '<div class="ph' + (idx > -1 ? ' sel' : '') + (used[f.id] ? ' in-report' : '') + (f.local ? ' local' : '') + '" data-fid="' + esc(f.id) + '" data-act="toggle">' +
         '<img loading="lazy" src="' + esc(f.thumb) + '" alt="' + esc(f.name) + '">' +
-        '<span class="num">' + (idx > -1 ? idx + 1 : '') + '</span><span class="used">In report</span>' +
+        '<span class="num">' + (idx > -1 ? idx + 1 : '') + '</span><span class="used">In report</span>' + (f.local ? '<span class="notjt">Not in JobTread yet</span>' : '') +
         '<button class="add1" data-act="addOne" aria-label="Add this photo to the report">+</button>' +
         '<button class="zoom" data-act="zoom" aria-label="Enlarge">&#10530;</button>' +
         '<span class="when">' + esc(fmtShort(f.createdAt)) + '</span></div>';
@@ -560,7 +560,7 @@ function renderEditor() {
       '<option value="__other"' + (mode === '__other' ? ' selected' : '') + '>Other (type your own)</option></select>' +
       '<input class="lbl" data-fid="' + esc(fid) + '" placeholder="Type your label"' + (mode === '__other' ? '' : ' hidden') + ' value="' + esc(e.label) + '" aria-label="Custom label">' +
       '<textarea class="cap" data-fid="' + esc(fid) + '" placeholder="Caption (optional)" aria-label="Caption">' + esc(e.caption) + '</textarea>' +
-      '<div class="sub">' + esc(fmtDateTime(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + '</div></div>' +
+      '<div class="sub">' + esc(fmtDateTime(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + (f.local ? ' &middot; <b class="notjt-txt">not in JobTread yet</b>' : '') + '</div></div>' +
       '<div class="rowbtns"><button class="icon-btn rm" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo" title="Remove from the report">&times;</button>' +
       '<button class="icon-btn swap" data-act="swapMenu" data-fid="' + esc(fid) + '" aria-label="Replace this photo" aria-haspopup="menu" title="Replace photo">&#8646;</button>' + swapMenu + '</div></li>';
   }
@@ -601,7 +601,17 @@ function renderEditor() {
     });
   }
 
-  function changed() { refreshLibraryMarks(); refreshBars(); refreshTargets(); saveDraft(); }
+  function changed() { pruneLocal(); refreshLibraryMarks(); refreshBars(); refreshTargets(); saveDraft(); }
+  // A device photo that is no longer in the report has nowhere else to live (it was never sent to JobTread), so it goes.
+  function pruneLocal() {
+    var used = usedSet(), gone = false;
+    state.files = state.files.filter(function (f) {
+      if (!f.local || used[f.id]) return true;
+      try { URL.revokeObjectURL(f.thumb); } catch (e) { /* ignore */ }
+      delete state.byId[f.id]; delete state.entries[f.id]; gone = true; return false;
+    });
+    if (gone) { state.selected = state.selected.filter(function (id) { return state.byId[id]; }); renderLibrary(); }
+  }
 
   // Drop from the photo library into a section.
   function onListAdd(evt) {
@@ -678,27 +688,53 @@ function renderEditor() {
     toast('Added ' + add.length + ' photo' + (add.length === 1 ? '' : 's') + ' to ' + (state.sections[si].title || 'Section ' + (si + 1)) + '.');
   }
 
-  // Camera button in the report: shrink the photo, save it to the job in JobTread (under this person's name),
-  // then put it straight into the highlighted section.
-  // target: section index (or 'new'); replaceFid: when set, the new photo takes that slot (label and caption kept).
+  // A photo taken or chosen on this device goes straight into the report. It is NOT sent to JobTread yet:
+  // when the PDF is generated the person is asked whether to upload these new photos to the job.
+  var localSeq = 0;
   function shootIntoReport(file, target, replaceFid) {
     if (!state.job) return;
     if (target === undefined || target === null) target = $('#targetSec') ? $('#targetSec').value : String(activeIdx());
-    overlay(true, 'Preparing photo...', 10);
+    overlay(true, 'Preparing photo...', 30);
     compressImage(file).then(function (r) {
-      overlay(true, 'Saving to JobTread...', 40);
-      return blobToB64(r.blob);
-    }).then(function (b64) {
-      return API.call('uploadFile', { jobId: state.job.id, name: 'Photo ' + stampFor(Date.now()), base64: b64, note: '', tagIds: [], folder: '' });
-    }).then(function (res) {
       overlay(false);
-      var f = res.file; if (!f || !f.id) { toast('Saved to JobTread. Tap Refresh to see it.'); return; }
-      if (!f.thumb) f.thumb = '';
+      var id = 'local_' + (++localSeq) + '_' + Date.now();
+      var f = { id: id, name: 'Photo ' + stampFor(Date.now()) + '.jpg', createdAt: new Date().toISOString(), folder: 'Photos',
+                note: '', by: state.user ? titleCase(state.user.name) : '', tags: [], thumb: URL.createObjectURL(r.blob), local: true, blob: r.blob };
       state.files.unshift(f); state.byId[f.id] = f;
       renderLibrary();
       if (replaceFid && usedSet()[replaceFid]) replacePhoto(replaceFid, f.id);
       else addToSection([f.id], target);
+      toast('Photo added. You will be asked to save it to JobTread when you generate the PDF.');
     }).catch(function (e) { overlay(false); handleError(e); });
+  }
+  // Photos in the report that only exist on this device so far.
+  function localInReport() {
+    var out = [];
+    state.sections.forEach(function (sec) { sec.fids.forEach(function (fid) { var f = state.byId[fid]; if (f && f.local) out.push(fid); }); });
+    return out;
+  }
+  // Send the device photos in the report to the job in JobTread, then swap their ids for the JobTread file ids
+  // (labels and captions stay). Returns a promise.
+  function uploadLocalPhotos(fids) {
+    var n = 0;
+    return fids.reduce(function (chain, fid) {
+      return chain.then(function () {
+        var f = state.byId[fid]; if (!f || !f.local) return;
+        overlay(true, 'Saving photo ' + (++n) + ' of ' + fids.length + ' to JobTread...', (n - 1) / fids.length * 100);
+        return blobToB64(f.blob).then(function (b64) {
+          return API.call('uploadFile', { jobId: state.job.id, name: f.name.replace(/\.jpg$/, ''), base64: b64, note: '', tagIds: [], folder: '' });
+        }).then(function (res) {
+          var nf = res.file; if (!nf || !nf.id) return;
+          if (!nf.thumb) nf.thumb = f.thumb; // keep the device preview until JobTread has a thumbnail
+          state.byId[nf.id] = nf;
+          var i = state.files.indexOf(f); if (i > -1) state.files[i] = nf; else state.files.unshift(nf);
+          delete state.byId[fid];
+          state.sections.forEach(function (sec) { var k = sec.fids.indexOf(fid); if (k > -1) sec.fids[k] = nf.id; });
+          if (state.entries[fid]) { state.entries[nf.id] = state.entries[fid]; delete state.entries[fid]; }
+          state.selected = state.selected.filter(function (x) { return x !== fid; });
+        });
+      });
+    }, Promise.resolve()).then(function () { renderLibrary(); renderSections(); changed(); });
   }
 
   // Bring a section to the middle of the report area (its own scroll box on the upright screen, the page otherwise).
@@ -812,6 +848,7 @@ function renderEditor() {
 
   // Try the JobTread image link straight from the browser; if the browser is blocked, go through the backend.
   function fetchPhotoBlob(f) {
+    if (f.local && f.blob) return Promise.resolve(f.blob);
     var url = f.thumb.replace(/size=\d+/, 'size=1024');
     var viaBackend = function () {
       return API.call('fetchImage', { fileId: f.id }).then(function (r) { return b64ToBlob(r.base64, r.contentType); });
@@ -845,6 +882,21 @@ function renderEditor() {
   }
 
   function generate() {
+    if (!photoTotal()) return;
+    var pending = localInReport();
+    if (pending.length && canShoot()) {
+      var msg = pending.length === 1 ? 'The report has 1 new photo from this device that is not in JobTread yet.\n\nUpload it to ' + state.job.name + ' now?'
+                                     : 'The report has ' + pending.length + ' new photos from this device that are not in JobTread yet.\n\nUpload them to ' + state.job.name + ' now?';
+      if (confirm(msg)) {
+        uploadLocalPhotos(pending).then(function () { overlay(false); buildPdf(); })
+          .catch(function (e) { overlay(false); handleError(e); renderLibrary(); renderSections(); changed(); });
+        return;
+      }
+    }
+    buildPdf();
+  }
+
+  function buildPdf() {
     var fids = [];
     state.sections.forEach(function (s) { s.fids.forEach(function (f) { fids.push(f); }); });
     if (!fids.length) return;
@@ -1677,6 +1729,7 @@ function renderEditor() {
       '<h2>2. View</h2><p><b>To-do list</b>: this job\'s to-dos; tick to mark done. <b>Files and plans</b>: tap a file to open it. <b>Photos</b>: browse the job photos; tap one to enlarge.</p>' +
       '<h2>3. Upload</h2><p><b>To-do</b>: add a to-do to the job. <b>Photos or file</b>: take a photo or choose photos/PDFs, add a comment, tags and a folder, then Upload. <b>Photo report</b>: pick photos, arrange them, make the PDF, email it or save it into JobTread.</p>' +
       '<h2>My tasks</h2><p>Everything assigned to you in JobTread, across all jobs. Tick to mark done.</p>' +
+      '<h2>Photos from your iPad in a report</h2><p>In a report, tap <b>&#8646;</b> on a slot or <b>+ Add photo to this section</b> to take a picture or pick one from your Photos. It stays on the device until you tap <b>Generate PDF</b>; the app then asks whether to save those new photos to the job in JobTread. Say No if one was a mistake, remove it with &times;, and generate again.</p>' +
       '<h2>Share the app with a co-worker</h2><p>Settings &rsaquo; <b>Share this app</b> sends the link by Messages, Mail or AirDrop (or copies it). They sign in with their own work email; an Admin sets what they can do.</p>' +
       '<h2>Something looks old or broken?</h2><p>Settings &rsaquo; <b>Refresh</b> loads the newest version. Your unfinished report comes back by itself.</p>' +
       '<h2>Signing in</h2><p>Use your work email. A 6-digit code arrives by email; it works for 10 minutes. You stay signed in for 12 hours.</p>' +
