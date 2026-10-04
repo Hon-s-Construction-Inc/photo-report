@@ -262,7 +262,9 @@
   function starBtn(j, full) {
     if (!j || !j.id) return '';
     var on = isMyJob(j.id);
-    return '<button class="star' + (on ? ' on' : ' add') + (full ? ' full' : '') + '" data-act="' + (on ? 'unstar' : 'star') + '" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" data-full="' + (full ? 1 : 0) + '" aria-pressed="' + on + '" aria-label="' + (on ? 'In My jobsite (tap to remove)' : 'Add to My jobsite') + '" title="' + (on ? 'In My jobsite' : 'Add to My jobsite') + '">' + starText(on, full) + '</button>';
+    // Add only. Once the job is in the list the small + disappears; the Working on line shows a plain label instead.
+    // Removing is done only with the x in the list itself.
+    return '<button class="star' + (on ? ' on' : ' add') + (full ? ' full' : '') + '" data-act="star" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" data-full="' + (full ? 1 : 0) + '"' + (on ? ' disabled' : '') + (on && !full ? ' hidden' : '') + ' aria-label="' + (on ? 'In My jobsite' : 'Add to My jobsite') + '" title="' + (on ? 'In My jobsite (remove it with the x in the list)' : 'Add to My jobsite') + '">' + starText(on, full) + '</button>';
   }
   function starText(on, full) { return on ? (full ? '&#10003; In My jobsite' : '&#10003;') : (full ? '+ Add to My jobsite' : '+'); }
   // The list lives on the server (per email), so every device shows the same one. A copy is kept here for instant display.
@@ -292,8 +294,8 @@
   function paintStars() {
     $$('.star:not(.unstar)').forEach(function (b) {
       var on = isMyJob(b.dataset.id), full = b.dataset.full === '1';
-      b.classList.toggle('on', on); b.classList.toggle('add', !on); b.innerHTML = starText(on, full); b.setAttribute('aria-pressed', on);
-      b.dataset.act = on ? 'unstar' : 'star'; b.title = on ? 'In My jobsite' : 'Add to My jobsite';
+      b.classList.toggle('on', on); b.classList.toggle('add', !on); b.innerHTML = starText(on, full); b.disabled = on; b.hidden = on && !full;
+      b.title = on ? 'In My jobsite (remove it with the x in the list)' : 'Add to My jobsite';
     });
     renderMyJobs(); renderActions();
     if (state.view === 'upload' && state.up && !state.up.job) paintJobResults();
