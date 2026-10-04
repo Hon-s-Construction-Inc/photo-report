@@ -470,7 +470,11 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   .topbar > .btn.primary, .topbar > [data-act=galleryUpload] { flex: 1 1 auto; }
   /* Report editor photo panel: one compact row of controls, a short add bar. */
   body.editing .editor > .panel > header { gap: 6px; }
-  body.editing .editor > .panel:first-child > header h2 { flex: 1 1 100%; font-size: 15px; margin: 0; }
+  body.editing .editor > .panel:first-child > header h2 { display: none; }   /* the buttons say it already; more room for photos */
+  body.editing .editor > .panel:first-child { flex: 1.6 1 0; }                /* photo picker gets about 60% of the screen */
+  body.editing .editor > .panel:last-child { flex: 1 1 0; }
+  body.editing .editor { gap: 6px; padding: 6px; }
+  body.editing #lib .day { margin: 2px 0 0; padding: 2px 0; font-size: 13px; }
   body.editing .editor > .panel:last-child > header { flex-wrap: nowrap; }
   body.editing .editor > .panel:first-child > header .seggrp { flex: 1 1 auto; }
   body.editing .editor > .panel:first-child > header .seggrp .seg { flex: 1; padding: 6px 8px; }
@@ -485,3 +489,4 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   .ftile b { font-size: 15px; }
   .ftile span { display: none; }
 }
+@media (max-width: 600px) { body.editing .topbar [data-act=editorFiles] { display: none; } }   /* Files and plans is one tap away from Jobs */
