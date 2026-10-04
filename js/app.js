@@ -177,14 +177,15 @@
     sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(j.name) + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
     // The app draws its own menu (not the browser's <select>) so each row is tall enough for a gloved finger.
     var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
-    var view = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files')) + o('goGallery', 'Photos', can('photos') || can('report'));
-    var up = (canWrite() ? o('goAddTodo', 'Add a to-do', can('todo')) + o('goUpload', 'Upload photos or a file', can('upload')) : '') + o('goReport', 'Photo report (PDF)', can('report'));
+    // Two places only, each for looking AND adding: the To-do list (+ Add a to-do) and Files & plans
+    // (plans and files, job photos, upload, photo report).
+    var items = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files &amp; plans', canFilesPlace());
     var box = $('#actionBox'); if (!box) return;
-    if (!view && !up) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
+    if (!items) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
     box.innerHTML = '<div class="actwrap"><button id="actionSel" class="actionsel" data-act="actMenu" aria-haspopup="menu" aria-expanded="false"' + (j ? '' : ' disabled') + '>' +
       (j ? 'Choose an action...' : 'Pick a job first') + '<span class="chev">&#9662;</span></button>' +
       '<div id="actMenu" class="actmenu" role="menu" hidden>' +
-      (view ? '<div class="grp">View</div>' + view : '') + (up ? '<div class="grp">Upload</div>' + up : '') + '</div></div>' +
+      items + '</div></div>' +
       '<p class="small muted">Pick what you want to do with the job you are working on.</p>' + (!canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '');
   }
   function toggleActMenu() {
@@ -192,6 +193,7 @@
     var open = m.hidden; closeMenus(); m.hidden = !open; b.setAttribute('aria-expanded', open);
   }
 
+  function canFilesPlace() { return can('files') || can('photos') || can('report') || can('upload'); }
   function runAction(act) {
     var j = state.pickedJob; if (!j) return toast('Pick a job first.');
     switch (act) {
@@ -1434,6 +1436,8 @@ function renderEditor() {
       if (uploaded && jobId === state.job.id) return pullJob(state.job); // bring in the new photos; the report draft comes back too
       return go('editor');
     }
+    if (from === 'gallery' && state.gallery && state.gallery.job) return uploaded ? openGallery(state.gallery.job) : go('gallery');
+    if (from === 'files' && state.filesJob) return uploaded ? openFiles(state.filesJob, state.filesFrom) : go('files');
     go('search');
   }
 
@@ -1504,6 +1508,7 @@ function renderEditor() {
     if (!job) return;
     state.filesJob = { id: job.id, name: job.name || '' }; state.filesFrom = from; state.filesList = null;
     go('files');
+    if (!can('files')) { state.filesList = { files: [], off: true }; return renderFiles(); }
     API.call('listFiles', { jobId: job.id }).then(function (r) {
       if (!state.filesJob || state.filesJob.id !== job.id) return;
       if (r.jobName) state.filesJob.name = r.jobName;
@@ -1523,7 +1528,8 @@ function renderEditor() {
     var j = state.filesJob, r = state.filesList;
     var body;
     if (!r) body = '<p class="muted">Loading files...</p>';
-    else if (!r.files.length) body = '<p class="muted">' + (r.failed ? 'Could not load the files.' : 'No files in this job yet (photos are on the Photos screen).') + '</p>';
+    else if (r.off) body = '';
+    else if (!r.files.length) body = '<p class="muted">' + (r.failed ? 'Could not load the files.' : 'No plans or files in this job yet.') + '</p>';
     else {
       var groups = {}, order = [];
       r.files.forEach(function (f) {
@@ -1546,9 +1552,14 @@ function renderEditor() {
     }
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="filesBack">&larr; Back</button>' +
-      '<div class="grow"><div class="title">' + esc(j.name) + '</div><div class="small muted">Files</div></div>' + starBtn(j) +
+      '<div class="grow"><div class="title">' + esc(j.name) + '</div><div class="small muted">Files and plans</div></div>' + starBtn(j) +
       settingsMenu() + '</header>' +
-      '<main class="page files">' + body + '</main>';
+      '<main class="page files"><div class="fstrip">' +
+      (can('photos') || can('report') ? '<button class="ftile" data-act="filesPhotos"><b>&#128247; Photos</b><span>See the job photos, by date or by tag</span></button>' : '') +
+      (can('upload') && canWrite() ? '<button class="ftile" data-act="filesUpload"><b>&#8679; Upload</b><span>Photos or files from this device, with comments</span></button>' : '') +
+      (can('report') ? '<button class="ftile primary" data-act="filesReport"><b>&#128196; Photo report</b><span>Build a before/after PDF</span></button>' : '') +
+      '</div>' + (can('upload') && !canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') +
+      (r && !r.off ? '<div class="lab">Plans and files</div>' : '') + body + '</main>';
   }
   function openFileLink(fid) {
     var f = (state.filesList && state.filesList.files || []).filter(function (x) { return x.id === fid; })[0];
@@ -1606,6 +1617,27 @@ function renderEditor() {
     API.call('listUsers').then(function (r) { state.admin = r; if (state.view === 'admin') renderAdmin(); })
       .catch(function (e) { state.admin = { users: [], failed: true }; if (state.view === 'admin') renderAdmin(); handleError(e); });
   }
+  // The admin switches follow the app's two places. Server keys stay the same; this only groups and words them.
+  var PERM_GROUPS = [
+    { title: 'To-do list', keys: ['todo'] },
+    { title: 'Files &amp; plans', keys: ['files', 'costFiles', 'photos', 'upload', 'report', 'saveJT'] },
+    { title: 'Top bar', keys: ['tasks'] }
+  ];
+  var PERM_WORDS = {
+    todo: 'See, add and tick off to-dos', files: 'See plans and job files', costFiles: 'Also see cost folders (invoices, subs, pay apps)',
+    photos: 'See job photos', upload: 'Upload photos and files', report: 'Make photo reports (PDF)', saveJT: 'Save the report PDF into JobTread', tasks: 'My tasks'
+  };
+  function permGroups(defs, one) {
+    var seen = {};
+    var html = PERM_GROUPS.map(function (g) {
+      var ds = g.keys.map(function (k) { seen[k] = true; return defs.filter(function (d) { return d.key === k; })[0]; }).filter(Boolean);
+      return ds.length ? '<div class="pgroup"><div class="pgt">' + g.title + '</div><div class="perms">' + ds.map(one).join('') + '</div></div>' : '';
+    }).join('');
+    var rest = defs.filter(function (d) { return !seen[d.key]; });
+    return html + (rest.length ? '<div class="pgroup"><div class="pgt">Other</div><div class="perms">' + rest.map(one).join('') + '</div></div>' : '');
+  }
+  function permLabel(d) { return PERM_WORDS[d.key] || d.label || d.key; }
+
   function renderAdmin() {
     var a = state.admin, body;
     if (!a) body = '<p class="muted">Loading users...</p>';
@@ -1614,20 +1646,20 @@ function renderEditor() {
       var defs = (a.perms || []).map(function (p) { return typeof p === 'string' ? { key: p, label: p } : p; });
       var feats = a.features || {};
       body = '<section class="user feats"><div class="uhead"><b>Buttons for everyone</b><span class="small muted">Company-wide. A button switched off here is hidden for every Project Manager, whatever their personal switch says. Admins always see everything.</span></div>' +
-        '<div class="perms">' + defs.map(function (d) {
-          return '<label class="perm"><input type="checkbox" class="featchk" data-perm="' + esc(d.key) + '"' + (feats[d.key] ? ' checked' : '') + '><span>' + esc(d.label || d.key) + '</span></label>';
-        }).join('') + '</div>' +
+        permGroups(defs, function (d) {
+          return '<label class="perm"><input type="checkbox" class="featchk" data-perm="' + esc(d.key) + '"' + (feats[d.key] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + '</span></label>';
+        }) +
         '<div class="row2 presets"><span class="small muted">Quick set:</span><button class="btn small" data-act="featPreset" data-preset="report">Photo report only</button><button class="btn small" data-act="featPreset" data-preset="all">Everything on</button></div></section>' +
         '<div class="lab">Per person</div><div class="users">' + a.users.map(function (u) {
         return '<div class="user' + (u.isAdmin ? ' adm' : '') + '"><div class="uhead"><b>' + esc(titleCase(u.name)) + '</b><span class="small muted">' + esc(u.email) + '</span>' +
           '<span class="badge' + (u.isAdmin ? ' has' : '') + '">' + esc(u.role) + '</span>' +
           '<span class="badge' + (u.hasKey ? ' has' : ' warn') + '" title="Needed to save or upload to JobTread">' + (u.hasKey ? 'JT key saved' : 'No JT key') + '</span></div>' +
           (u.isAdmin ? '<div class="small muted">Admins always have full access here.</div>' :
-            '<div class="perms">' + defs.map(function (d) {
+            permGroups(defs, function (d) {
               var k = d.key;
               var off = a.features && a.features[k] === false;
-              return '<label class="perm' + (off ? ' gated' : '') + '" title="' + (off ? 'Switched off for everyone above' : '') + '"><input type="checkbox" class="permchk" data-email="' + esc(u.email) + '" data-perm="' + esc(k) + '"' + (u.perms[k] ? ' checked' : '') + '><span>' + esc(d.label || k) + (off ? ' <i>(off for everyone)</i>' : '') + '</span></label>';
-            }).join('') + '</div>') + '</div>';
+              return '<label class="perm' + (off ? ' gated' : '') + '" title="' + (off ? 'Switched off for everyone above' : '') + '"><input type="checkbox" class="permchk" data-email="' + esc(u.email) + '" data-perm="' + esc(k) + '"' + (u.perms[k] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + (off ? ' <i>(off for everyone)</i>' : '') + '</span></label>';
+            })) + '</div>';
       }).join('') + '</div>';
     }
     app.innerHTML =
@@ -1676,7 +1708,8 @@ function renderEditor() {
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="galleryBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">' + esc(g.job.name) + '</div><div class="small muted">' + files.length + ' photos</div></div>' + starBtn(g.job) +
-      groupSwitch('groupGal') + (can('report') ? '<button class="btn small primary" data-act="galleryReport">Make a report</button>' : '') + settingsMenu() + '</header>' +
+      groupSwitch('groupGal') + (can('upload') && canWrite() ? '<button class="btn small" data-act="galleryUpload">&#8679; Upload photos</button>' : '') +
+      (can('report') ? '<button class="btn small primary" data-act="galleryReport">Make a report</button>' : '') + settingsMenu() + '</header>' +
       '<main class="page gallery">' + (files.length ? '<div class="lib gal">' + grid + '</div>' : '<p class="muted">No photos in this job yet.</p>') + '</main>';
   }
 
@@ -1751,9 +1784,9 @@ function renderEditor() {
       '<header class="topbar"><button class="btn small" data-act="helpBack">&larr; Back</button><div class="grow"><div class="title">Help</div></div>' + settingsMenu() + '</header>' +
       '<main class="page help">' +
       '<h1>How to use the app</h1>' +
-      '<h2>1. Pick the job</h2><p>Type the house number in <b>Find a job</b>, or tap a job under <b>My jobs</b>. Tap &#9734; on any job to keep it in My jobs; tap &#9733; to remove it.</p>' +
-      '<h2>2. View</h2><p><b>To-do list</b>: this job\'s to-dos; tick to mark done. <b>Files and plans</b>: tap a file to open it. <b>Photos</b>: browse the job photos; tap one to enlarge.</p>' +
-      '<h2>3. Upload</h2><p><b>To-do</b>: add a to-do to the job. <b>Photos or file</b>: take a photo or choose photos/PDFs, add a comment, tags and a folder, then Upload. <b>Photo report</b>: pick photos, arrange them, make the PDF, email it or save it into JobTread.</p>' +
+      '<h2>1. Pick the job</h2><p>Type the house number in <b>Find job</b>, or tap a job under <b>My jobsite</b>. Tap <b>+</b> on a found job to keep it in My jobsite; tap &times; in the list to remove it.</p>' +
+      '<h2>2. To-do list</h2><p>This job\'s to-dos: tick to mark done, or <b>+ Add a to-do</b>.</p>' +
+      '<h2>3. Files &amp; plans</h2><p><b>Photos</b>: browse the job photos by date or by tag. <b>Upload</b>: photos or PDFs from this device with a comment, tags and a folder. <b>Photo report</b>: pick photos, arrange them, make the PDF, email it or save it into JobTread. Below those, tap any plan or file to open it.</p>' +
       '<h2>My tasks</h2><p>Everything assigned to you in JobTread, across all jobs. Tick to mark done.</p>' +
       '<h2>Photos from your iPad in a report</h2><p>In a report, tap <b>&#8646;</b> on a slot or <b>+ Add photo to this section</b> to take a picture or pick one from your Photos. It stays on the device until you tap <b>Generate PDF</b>; the app then asks whether to save those new photos to the job in JobTread. Say No if one was a mistake, remove it with &times;, and generate again.</p>' +
       '<h2>Share the app with a co-worker</h2><p>Settings &rsaquo; <b>Share this app</b> sends the link by Messages, Mail or AirDrop (or copies it). They sign in with their own work email; an Admin sets what they can do.</p>' +
@@ -1789,7 +1822,11 @@ function renderEditor() {
       case 'help': closeMenus(); return go('help');
       case 'helpBack': return go('search');
       case 'goTodos': case 'goAddTodo': case 'goFiles': case 'goGallery': case 'goUpload': case 'goReport': return runAction(act);
-      case 'galleryBack': return go('search');
+      case 'galleryBack': { var gf = state.galleryFrom; state.galleryFrom = null; return gf === 'files' && state.filesJob ? go('files') : go('search'); }
+      case 'galleryUpload': return openUpload(state.gallery.job, 'gallery');
+      case 'filesUpload': return openUpload(state.filesJob, 'files');
+      case 'filesPhotos': state.galleryFrom = 'files'; return openGallery(state.filesJob);
+      case 'filesReport': return pullJob(state.filesJob);
       case 'galleryReport': return openEditor(state.gallery.job, state.gallery.files);
       case 'galleryZoom': { var gf = state.gallery.files.filter(function (f) { return f.id === el.dataset.fid; })[0]; if (gf) { $('#preview-img').src = gf.thumb.replace(/size=\d+/, 'size=1024'); $('#preview').hidden = false; } return; }
       case 'todosBack': return go('search');

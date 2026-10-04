@@ -440,3 +440,15 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .seggrp .seg.on { background: var(--blue-soft); color: var(--blue); }
 @media (pointer: coarse) { .seggrp .seg { min-height: 44px; padding: 8px 14px; } }
 .day.taghead { color: var(--blue); }
+
+/* Files & plans: the three big actions on top. */
+.fstrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.ftile { text-align: left; display: grid; gap: 4px; padding: 14px 16px; min-height: 72px; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; color: var(--ink); }
+.ftile b { font-size: 17px; }
+.ftile span { font-size: 13px; color: var(--muted); }
+.ftile:hover { border-color: var(--blue); background: var(--blue-soft); }
+.ftile.primary { border-color: var(--blue); background: var(--blue-soft); }
+.ftile.primary b { color: var(--blue); }
+/* Admin switches grouped by place. */
+.pgroup { margin-top: 8px; }
+.pgroup .pgt { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
