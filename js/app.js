@@ -552,8 +552,7 @@ function renderEditor() {
                     '<label class="swapopt"><span>&#128444; Choose from my photos</span><input type="file" class="camSlot" data-fid="' + esc(fid) + '" accept="image/*"></label>' : '') +
       '</div>';
     return '<li class="row' + (state.replacing === fid ? ' replacing' : '') + '" data-fid="' + esc(fid) + '">' +
-      '<div class="rowleft"><button class="icon-btn rm" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo" title="Remove from the report">&times;</button>' +
-      '<img class="thumb" src="' + esc(f.thumb) + '" alt=""></div>' +
+      '<img class="thumb" src="' + esc(f.thumb) + '" alt="">' +
       '<div class="meta"><div class="slot"></div><select class="lbl-sel" data-fid="' + esc(fid) + '" aria-label="Photo label">' +
       '<option value=""' + (mode === '' ? ' selected' : '') + '>Label: choose...</option>' +
       '<option value="Before Photo"' + (mode === 'Before Photo' ? ' selected' : '') + '>Before Photo</option>' +
@@ -562,7 +561,8 @@ function renderEditor() {
       '<input class="lbl" data-fid="' + esc(fid) + '" placeholder="Type your label"' + (mode === '__other' ? '' : ' hidden') + ' value="' + esc(e.label) + '" aria-label="Custom label">' +
       '<textarea class="cap" data-fid="' + esc(fid) + '" placeholder="Caption (optional)" aria-label="Caption">' + esc(e.caption) + '</textarea>' +
       '<div class="sub">' + esc(fmtDateTime(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + '</div></div>' +
-      '<div class="rowbtns"><button class="icon-btn swap" data-act="swapMenu" data-fid="' + esc(fid) + '" aria-label="Replace this photo" aria-haspopup="menu" title="Replace photo">&#8646;</button>' + swapMenu + '</div></li>';
+      '<div class="rowbtns"><button class="icon-btn rm" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo" title="Remove from the report">&times;</button>' +
+      '<button class="icon-btn swap" data-act="swapMenu" data-fid="' + esc(fid) + '" aria-label="Replace this photo" aria-haspopup="menu" title="Replace photo">&#8646;</button>' + swapMenu + '</div></li>';
   }
   function toggleSwapMenu(btn) {
     var m = btn.parentNode.querySelector('.swapmenu'); if (!m) return;
