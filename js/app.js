@@ -490,7 +490,9 @@
         '<button class="icon-btn" data-act="secDown" data-si="' + si + '" aria-label="Move down">&darr;</button>' +
         '<button class="icon-btn" data-act="secDel" data-si="' + si + '" aria-label="Delete section">&times;</button></div></div>' +
         '<div class="sec-note"><input class="sec-note-in" data-si="' + si + '" placeholder="Description (optional)" value="' + esc(sec.note) + '" aria-label="Section description"></div>' +
-        '<ul class="sec-list' + (side ? ' side' : '') + '" data-sec="' + si + '">' + sec.fids.map(rowHtml).join('') + '</ul></div>';
+        '<ul class="sec-list' + (side ? ' side' : '') + '" data-sec="' + si + '">' + sec.fids.map(rowHtml).join('') + '</ul>' +
+        (canShoot() ? '<div class="sec-add"><label class="btn small pick cam sec-cam" title="Take a photo and add it to this section"><span>+ &#128247; Take photo for this section</span><input type="file" class="camSec" data-si="' + si + '" accept="image/*" capture="environment"></label></div>' : '') +
+        '</div>';
     }).join('');
     $$('.sec-list', box).forEach(function (ul) {
       sortables.push(Sortable.create(ul, {
@@ -502,10 +504,14 @@
     refreshTargets();
   }
 
+  // Camera controls inside the report are only shown when this person may upload to JobTread.
+  function canShoot() { return can('upload') && canWrite(); }
+
   function rowHtml(fid) {
     var f = state.byId[fid]; if (!f) return '';
     var e = entry(fid);
     var mode = labelMode(e);
+    var cam = canShoot() ? '<label class="icon-btn cam-slot" title="Take a new photo for this slot" aria-label="Take a new photo for this slot"><span>&#128247;</span><input type="file" class="camSlot" data-fid="' + esc(fid) + '" accept="image/*" capture="environment"></label>' : '';
     return '<li class="row' + (state.replacing === fid ? ' replacing' : '') + '" data-fid="' + esc(fid) + '">' +
       '<img class="thumb" src="' + esc(f.thumb) + '" alt="">' +
       '<div class="meta"><div class="slot"></div><select class="lbl-sel" data-fid="' + esc(fid) + '" aria-label="Photo label">' +
@@ -516,7 +522,7 @@
       '<input class="lbl" data-fid="' + esc(fid) + '" placeholder="Type your label"' + (mode === '__other' ? '' : ' hidden') + ' value="' + esc(e.label) + '" aria-label="Custom label">' +
       '<textarea class="cap" data-fid="' + esc(fid) + '" placeholder="Caption (optional)" aria-label="Caption">' + esc(e.caption) + '</textarea>' +
       '<div class="sub">' + esc(fmtDateTime(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + '</div></div>' +
-      '<div class="rowbtns"><button class="icon-btn swap" data-act="swap" data-fid="' + esc(fid) + '" aria-label="Replace this photo with another" title="Replace photo">&#8646;</button>' +
+      '<div class="rowbtns">' + cam + '<button class="icon-btn swap" data-act="swap" data-fid="' + esc(fid) + '" aria-label="Replace this photo with another" title="Replace photo">&#8646;</button>' +
       '<button class="icon-btn" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo">&times;</button></div></li>';
   }
 
@@ -596,9 +602,10 @@
 
   // Camera button in the report: shrink the photo, save it to the job in JobTread (under this person's name),
   // then put it straight into the highlighted section.
-  function shootIntoReport(file) {
+  // target: section index (or 'new'); replaceFid: when set, the new photo takes that slot (label and caption kept).
+  function shootIntoReport(file, target, replaceFid) {
     if (!state.job) return;
-    var target = $('#targetSec') ? $('#targetSec').value : String(activeIdx());
+    if (target === undefined || target === null) target = $('#targetSec') ? $('#targetSec').value : String(activeIdx());
     overlay(true, 'Preparing photo...', 10);
     compressImage(file).then(function (r) {
       overlay(true, 'Saving to JobTread...', 40);
@@ -611,7 +618,8 @@
       if (!f.thumb) f.thumb = '';
       state.files.unshift(f); state.byId[f.id] = f;
       renderLibrary();
-      addToSection([f.id], target);
+      if (replaceFid && usedSet()[replaceFid]) replacePhoto(replaceFid, f.id);
+      else addToSection([f.id], target);
     }).catch(function (e) { overlay(false); handleError(e); });
   }
 
@@ -1720,6 +1728,8 @@
     var t = ev.target;
     if (t.id === 'fileCam' || t.id === 'fileLib') { addFiles(t.files); t.value = ''; return; }
     if (t.id === 'camShot') { var shot = t.files && t.files[0]; t.value = ''; if (shot) shootIntoReport(shot); return; }
+    if (t.classList && t.classList.contains('camSlot')) { var s1 = t.files && t.files[0], fid1 = t.dataset.fid; t.value = ''; if (s1) shootIntoReport(s1, null, fid1); return; }
+    if (t.classList && t.classList.contains('camSec')) { var s2 = t.files && t.files[0], si2 = t.dataset.si; t.value = ''; if (s2) shootIntoReport(s2, si2); return; }
     if (t.id === 'actionSel') { var act = t.value; t.value = ''; if (act) runAction(act); return; }
     if (t.classList && t.classList.contains('upchk')) { state.up.sel[t.dataset.uid] = t.checked; return paintBulk(); }
     if (t.classList && t.classList.contains('todochk')) return setTodoDone(t.dataset.id, t.checked, t);
