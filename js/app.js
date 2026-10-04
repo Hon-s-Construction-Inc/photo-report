@@ -214,7 +214,7 @@
       '<button data-act="signOut">Sign out</button></div></div>';
   }
   function closeMenus() {
-    $$('.ddm, .actmenu').forEach(function (m) { m.hidden = true; });
+    $$('.ddm, .actmenu, .swapmenu').forEach(function (m) { m.hidden = true; });
     $$('.dd > .btn, #actionSel').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
 
@@ -505,7 +505,7 @@ function renderEditor() {
     }).join('');
     var s = Sortable.create(lib, {
       group: { name: 'photos', pull: 'clone', put: false }, sort: false, animation: 150, draggable: '.ph',
-      delay: 160, delayOnTouchOnly: true, filter: '.zoom, .add1', preventOnFilter: false
+      delay: 160, delayOnTouchOnly: true, filter: '.zoom, .add1', preventOnFilter: false, onEnd: onLibEnd
     });
     sortables.push(s);
   }
@@ -532,7 +532,7 @@ function renderEditor() {
       sortables.push(Sortable.create(ul, {
         group: { name: 'photos', pull: true, put: true }, animation: 150, handle: '.thumb',
         delay: 120, delayOnTouchOnly: true, ghostClass: 'sortable-ghost',
-        onAdd: onListAdd, onUpdate: syncFromDom
+        onAdd: onListAdd, onUpdate: syncFromDom, onEnd: onRowEnd
       }));
     });
     refreshTargets();
@@ -545,9 +545,15 @@ function renderEditor() {
     var f = state.byId[fid]; if (!f) return '';
     var e = entry(fid);
     var mode = labelMode(e);
-    var cam = canShoot() ? '<label class="icon-btn cam-slot" title="Take or choose a new photo for this slot" aria-label="Take or choose a new photo for this slot"><span>&#128247;</span><input type="file" class="camSlot" data-fid="' + esc(fid) + '" accept="image/*"></label>' : '';
+    // Replace menu: from the job's JobTread photos, a new picture, or a picture already on this device.
+    var swapMenu = '<div class="swapmenu" hidden>' +
+      '<button class="swapopt" data-act="swap" data-fid="' + esc(fid) + '">&#8646; From job photos (JobTread)</button>' +
+      (canShoot() ? '<label class="swapopt"><span>&#128247; Take a new photo</span><input type="file" class="camSlot" data-fid="' + esc(fid) + '" accept="image/*" capture="environment"></label>' +
+                    '<label class="swapopt"><span>&#128444; Choose from my photos</span><input type="file" class="camSlot" data-fid="' + esc(fid) + '" accept="image/*"></label>' : '') +
+      '</div>';
     return '<li class="row' + (state.replacing === fid ? ' replacing' : '') + '" data-fid="' + esc(fid) + '">' +
-      '<img class="thumb" src="' + esc(f.thumb) + '" alt="">' +
+      '<div class="rowleft"><button class="icon-btn rm" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo" title="Remove from the report">&times;</button>' +
+      '<img class="thumb" src="' + esc(f.thumb) + '" alt=""></div>' +
       '<div class="meta"><div class="slot"></div><select class="lbl-sel" data-fid="' + esc(fid) + '" aria-label="Photo label">' +
       '<option value=""' + (mode === '' ? ' selected' : '') + '>Label: choose...</option>' +
       '<option value="Before Photo"' + (mode === 'Before Photo' ? ' selected' : '') + '>Before Photo</option>' +
@@ -556,8 +562,11 @@ function renderEditor() {
       '<input class="lbl" data-fid="' + esc(fid) + '" placeholder="Type your label"' + (mode === '__other' ? '' : ' hidden') + ' value="' + esc(e.label) + '" aria-label="Custom label">' +
       '<textarea class="cap" data-fid="' + esc(fid) + '" placeholder="Caption (optional)" aria-label="Caption">' + esc(e.caption) + '</textarea>' +
       '<div class="sub">' + esc(fmtDateTime(f.createdAt)) + (f.by ? ' &middot; ' + esc(f.by) : '') + '</div></div>' +
-      '<div class="rowbtns">' + cam + '<button class="icon-btn swap" data-act="swap" data-fid="' + esc(fid) + '" aria-label="Replace this photo with another" title="Replace photo">&#8646;</button>' +
-      '<button class="icon-btn" data-act="rm" data-fid="' + esc(fid) + '" aria-label="Remove photo">&times;</button></div></li>';
+      '<div class="rowbtns"><button class="icon-btn swap" data-act="swapMenu" data-fid="' + esc(fid) + '" aria-label="Replace this photo" aria-haspopup="menu" title="Replace photo">&#8646;</button>' + swapMenu + '</div></li>';
+  }
+  function toggleSwapMenu(btn) {
+    var m = btn.parentNode.querySelector('.swapmenu'); if (!m) return;
+    var open = m.hidden; closeMenus(); m.hidden = !open;
   }
 
   function refreshTargets() {
@@ -604,6 +613,41 @@ function renderEditor() {
     var dropped = state.sections[Number(evt.to.dataset.sec)]; if (dropped) { state.activeSec = dropped; state.addNew = false; }
     syncFromDom();
   }
+
+  // The whole section box is a drop target, not only the thin photo list inside it. When a drag ends anywhere
+  // over a section (its title, description, empty space, the add button), the photo goes into that section.
+  function dropPoint(evt) {
+    var e = evt && evt.originalEvent; if (!e) return null;
+    var t = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]) || e;
+    return typeof t.clientX === 'number' ? { x: t.clientX, y: t.clientY } : null;
+  }
+  function sectionAtPoint(p) {
+    if (!p) return -1;
+    var el = document.elementFromPoint(p.x, p.y);
+    var sec = el && el.closest ? el.closest('#sections .sec') : null;
+    return sec ? Number(sec.dataset.sec) : -1;
+  }
+  // A row dragged out of its list and let go somewhere else on a section: move it there (to the end).
+  function onRowEnd(evt) {
+    if (evt.to !== evt.from) return; // landed in another list: onAdd already handled it
+    var fid = evt.item.dataset.fid, fromSi = Number(evt.from.dataset.sec);
+    var si = sectionAtPoint(dropPoint(evt));
+    if (si < 0 || si === fromSi || !state.sections[si]) return;
+    var from = state.sections[fromSi], i = from ? from.fids.indexOf(fid) : -1;
+    if (i > -1) from.fids.splice(i, 1);
+    state.sections[si].fids.push(fid); entry(fid);
+    state.activeSec = state.sections[si]; state.addNew = false;
+    renderSections(); changed(); revealRow(fid);
+    toast('Moved to ' + (state.sections[si].title || 'Section ' + (si + 1)) + '.');
+  }
+  // A library photo let go over a section but not exactly on its list: add it there.
+  function onLibEnd(evt) {
+    if (evt.to !== evt.from) return;
+    var si = sectionAtPoint(dropPoint(evt));
+    if (si < 0) return;
+    addToSection([evt.item.dataset.fid], String(si));
+  }
+  window.__dropTest = { onRowEnd: onRowEnd, onLibEnd: onLibEnd };
 
   // Rebuild the sections from what is on screen (after drag and drop).
   function syncFromDom() {
@@ -1695,6 +1739,7 @@ function renderEditor() {
       }
       case 'refreshApp': return refreshApp();
       case 'actMenu': ev.stopPropagation(); return toggleActMenu();
+      case 'swapMenu': ev.stopPropagation(); return toggleSwapMenu(el);
       case 'runAct': closeMenus(); return runAction(el.dataset.run);
       case 'shareApp': return shareApp();
       case 'backToSearch': return go('search');
