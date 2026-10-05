@@ -512,3 +512,13 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   .home #activeJobs .job { flex-direction: column; align-items: flex-start; gap: 4px; }
   .home #activeJobs { max-height: none; }
 }
+
+/* Labels on one line so My jobsite and Action frames start level. */
+.home .cols .lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Active jobs: thinner rows, name on top, status underneath. */
+.home #activeJobs .results { gap: 4px; }
+.home #activeJobs .job { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 0; padding: 6px 12px; }
+.home #activeJobs .job .name { font-size: 16px; line-height: 1.25; }
+.home #activeJobs .phase { font-size: 11px; padding: 0; background: none; color: var(--muted); font-weight: 600; }
+.home #activeJobs .job.picked .phase { background: none; color: #dbe9fb; }
+.home #activeJobs .jobrow .star { min-height: 0; align-self: stretch; }

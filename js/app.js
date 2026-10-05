@@ -165,9 +165,9 @@
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div>' +
-      '<div class="cols"><section class="col"><div class="lab">My jobsite <span class="small muted">(tap + on a found job to keep it here; &times; removes it)</span></div><div id="myJobs"></div></section>' +
+      '<div class="cols"><section class="col"><div class="lab">My jobsite</div><div id="myJobs"></div></section>' +
       '<section class="col act"><div class="lab">Action</div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab">Active jobs <span class="small muted">(tap + to add to My jobsite)</span></div><div id="activeJobs"></div></section></div></main>';
+      '<section class="col active"><div class="lab">Active jobs <span class="small muted">&middot; tap + to add to My jobsite</span></div><div id="activeJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
