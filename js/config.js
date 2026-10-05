@@ -1,7 +1,7 @@
 // Edit this file after deploying the Apps Script backend (see README.md).
 window.APP_CONFIG = {
   // The "Web app" URL from Apps Script > Deploy > Manage deployments.
-  API_URL: 'https://script.google.com/macros/s/AKfycbzLGwP8vN2KuG82YfXZlxYK3YRChaWxzBMwNuBtu-NFaMfzKQkSh7oFFcxUM6O5h9Ip1w/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbxof3x6SfdS2BtPBwv4a6ITQ7a0nbGK9e1TKkBq_L506b-DtQbrTDOEb0FCnBjxYy1FlA/exec',
   COMPANY: 'HCI',
   TIMEZONE: 'America/Los_Angeles',
   // Photos sent to the PDF: longest edge in pixels and JPEG quality (keeps files email-friendly).
