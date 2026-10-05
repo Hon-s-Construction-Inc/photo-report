@@ -462,7 +462,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   .topbar > .btn:first-child { order: 0; }
   .topbar > .grow { order: 1; flex: 1 1 calc(100% - 240px); }
   .topbar > .dd { order: 2; }
-  .topbar > *:not(.btn:first-child):not(.grow):not(.dd) { order: 3; }
+  .topbar > *:not(.btn:first-child):not(.grow):not(.dd):not(.logo-sm) { order: 3; }
   .topbar .btn { white-space: nowrap; }
   .topbar > .small.muted:not(.userName) { display: none; }   /* "244 photos" - shown in the panel instead */
   .topbar > .seggrp { flex: 1 1 auto; }
@@ -490,3 +490,25 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
   .ftile span { display: none; }
 }
 @media (max-width: 600px) { body.editing .topbar [data-act=editorFiles] { display: none; } }   /* Files and plans is one tap away from Jobs */
+
+/* Home: Active jobs. iPad: under My jobsite. Phone: under Action. */
+.cols { grid-template-areas: "my act" "active act"; }
+.cols > .col:first-child { grid-area: my; }
+.cols > .col.act { grid-area: act; }
+.cols > .col.active { grid-area: active; }
+@media (max-width: 760px) { .cols { grid-template-areas: "my" "act" "active"; } }
+.home #activeJobs { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; max-height: 60vh; overflow: auto; -webkit-overflow-scrolling: touch; }
+.home #activeJobs .results { gap: 6px; }
+.home #activeJobs .job { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
+.home #activeJobs .phase { font-size: 12px; font-weight: 600; color: var(--muted); background: #f2f4f7; border-radius: 999px; padding: 2px 8px; white-space: nowrap; flex: none; }
+.home #activeJobs .job.picked .phase { background: rgba(255,255,255,.2); color: #fff; }
+.home #activeJobs .star.on[hidden] + .job { margin-left: 52px; }
+.home #myJobs { min-height: 0; }
+@media (max-width: 600px) {
+  .topbar > .logo-sm { order: 0; }                       /* home bar: logo, app name, Settings on row 1 */
+  .selbox { flex-wrap: wrap; row-gap: 6px; margin: 10px 0 12px; }
+  .selname { flex-wrap: wrap; font-size: 18px; row-gap: 6px; }
+  .selname .star.full { margin-left: 0; }
+  .home #activeJobs .job { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .home #activeJobs { max-height: none; }
+}

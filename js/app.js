@@ -166,8 +166,9 @@
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div>' +
       '<div class="cols"><section class="col"><div class="lab">My jobsite <span class="small muted">(tap + on a found job to keep it here; &times; removes it)</span></div><div id="myJobs"></div></section>' +
-      '<section class="col act"><div class="lab">Action</div><div id="actionBox"></div></section></div></main>';
-    renderResults(); renderMyJobs(); renderActions();
+      '<section class="col act"><div class="lab">Action</div><div id="actionBox"></div></section>' +
+      '<section class="col active"><div class="lab">Active jobs <span class="small muted">(tap + to add to My jobsite)</span></div><div id="activeJobs"></div></section></div></main>';
+    renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
 
@@ -308,7 +309,7 @@
       b.classList.toggle('on', on); b.classList.toggle('add', !on); b.innerHTML = starText(on, full); b.disabled = on; b.hidden = on && !full;
       b.title = on ? 'In My jobsite (remove it with the x in the list)' : 'Add to My jobsite';
     });
-    renderMyJobs(); renderActions();
+    renderMyJobs(); renderActions(); renderActiveJobs();
     if (state.view === 'upload' && state.up && !state.up.job) paintJobResults();
   }
   function renderMyJobs() {
@@ -318,6 +319,25 @@
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       var x = '<button class="star unstar" data-act="unstar" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-label="Remove from My jobsite" title="Remove from My jobsite">&times;</button>';
       return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(j.name) + '</span></button></div>';
+    }).join('') + '</div>';
+  }
+
+  /* ------------------------------------------------------------------ Active jobs (open jobs in the phases an Admin picked) */
+  var activeAt = 0;
+  function loadActiveJobs(force) {
+    if (!force && state.active && Date.now() - activeAt < 120000) return;
+    API.call('phaseJobs').then(function (r) { state.active = r.jobs || []; activeAt = Date.now(); renderActiveJobs(); })
+      .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.active = state.active || []; state.activeFailed = true; renderActiveJobs(); });
+  }
+  function renderActiveJobs() {
+    var box = $('#activeJobs'); if (!box) return;
+    var list = state.active;
+    if (!list) { box.innerHTML = '<p class="small muted">Loading jobs...</p>'; return; }
+    if (!list.length) { box.innerHTML = '<p class="small muted">' + (state.activeFailed ? 'Could not load the job list.' : 'No jobs in the chosen phases.') + '</p>'; return; }
+    box.innerHTML = '<div class="results">' + sortMyJobs(list).map(function (j) {
+      var picked = state.pickedJob && state.pickedJob.id === j.id;
+      return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
+        '<span class="name">' + esc(j.name) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button></div>';
     }).join('') + '</div>';
   }
 
@@ -1652,6 +1672,10 @@ function renderEditor() {
           return '<label class="perm"><input type="checkbox" class="featchk" data-perm="' + esc(d.key) + '"' + (feats[d.key] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + '</span></label>';
         }) +
         '<div class="row2 presets"><span class="small muted">Quick set:</span><button class="btn small" data-act="featPreset" data-preset="report">Photo report only</button><button class="btn small" data-act="featPreset" data-preset="all">Everything on</button></div></section>' +
+        ((a.phaseOptions || []).length ? '<section class="user feats phases"><div class="uhead"><b>Active jobs list for everyone</b><span class="small muted">Open jobs whose JobTread Status is ticked here show under Active jobs on everyone\'s home screen.</span></div>' +
+          '<div class="perms">' + (a.phaseOptions || []).map(function (ph) {
+            return '<label class="perm"><input type="checkbox" class="phasechk" value="' + esc(ph) + '"' + ((a.phases || []).indexOf(ph) > -1 ? ' checked' : '') + '><span>' + esc(ph) + '</span></label>';
+          }).join('') + '</div></section>' : '') +
         '<div class="lab">Per person</div><div class="users">' + a.users.map(function (u) {
         return '<div class="user' + (u.isAdmin ? ' adm' : '') + '"><div class="uhead"><b>' + esc(titleCase(u.name)) + '</b><span class="small muted">' + esc(u.email) + '</span>' +
           '<span class="badge' + (u.isAdmin ? ' has' : '') + '">' + esc(u.role) + '</span>' +
@@ -1816,10 +1840,11 @@ function renderEditor() {
       case 'useOther': state.loginStep = 'email'; return renderLogin();
       case 'signOut': API.clearSession(); state.user = null; state.loginStep = 'email'; return go('login');
       case 'pick': {
-        var pj = state.jobs.concat(state.myJobs).filter(function (j) { return j.id === el.dataset.id; })[0] || null;
+        var pj = state.jobs.concat(state.myJobs, state.active || []).filter(function (j) { return j.id === el.dataset.id; })[0] || null;
+        if (pj) pj = { id: pj.id, name: pj.name };
         state.pickedJob = pj && state.pickedJob && state.pickedJob.id === pj.id ? state.pickedJob : pj;
         if (el.closest('#results')) { state.query = ''; state.jobs = []; var qi = $('#q'); if (qi) qi.value = ''; }
-        renderResults(); renderMyJobs(); return renderActions();
+        renderResults(); renderMyJobs(); renderActiveJobs(); return renderActions();
       }
       case 'menu': { ev.stopPropagation(); var m = el.nextElementSibling, open = m.hidden; closeMenus(); m.hidden = !open; el.setAttribute('aria-expanded', open); return; }
       case 'help': closeMenus(); return go('help');
@@ -1939,6 +1964,13 @@ function renderEditor() {
     if (t.classList && t.classList.contains('todochk')) return setTodoDone(t.dataset.id, t.checked, t);
     if (t.classList && t.classList.contains('taskchk')) return setTaskDone(t.dataset.id, t.checked, t);
     if (t.classList && t.classList.contains('permchk')) return setPerm(t.dataset.email, t.dataset.perm, t.checked, t);
+    if (t.classList && t.classList.contains('phasechk')) {
+      var ph = $$('.phasechk').filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
+      $$('.phasechk').forEach(function (c) { c.disabled = true; });
+      return API.call('setPhases', { phases: ph }).then(function (r) {
+        state.admin.phases = r.phases; state.active = null; toast('Active jobs list updated.'); $$('.phasechk').forEach(function (c) { c.disabled = false; });
+      }).catch(function (e) { t.checked = !t.checked; $$('.phasechk').forEach(function (c) { c.disabled = false; }); handleError(e); });
+    }
     if (t.classList && t.classList.contains('featchk')) {
       var nf = {}; Object.keys(state.admin.features || {}).forEach(function (k) { nf[k] = state.admin.features[k]; }); nf[t.dataset.perm] = t.checked;
       return setFeatures(nf, $$('.featchk'));
