@@ -64,7 +64,7 @@
   };
   // What this person may do here (set by an Admin). Until the server answers, everything shows.
   function can(k) { return !state.perms || state.perms[k] !== false; }
-  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; } if (r && r.write) state.write = r.write; }
+  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; API.saveAccess(r); } if (r && r.write) state.write = r.write; }
   // Can this person save to JobTread right now? Unknown until the server says; then every write control follows it.
   function canWrite() { return !state.write || state.write.ok !== false; }
   function writeWhy() { return (state.write && state.write.message) || 'Saving to JobTread is not available for you yet.'; }
@@ -2004,10 +2004,18 @@ function renderEditor() {
   /* ------------------------------------------------------------------ start */
   function start() {
     if (!API.hasSession()) return go('login');
-    API.call('me').then(function (r) { state.user = r.user; takePerms(r); afterSignIn(); })
-      .catch(function (e) {
+    // Open straight away with what this device knew last time; the server check runs in the background
+    // and the screen is redrawn only if something changed (new switches, signed out, etc.).
+    var saved = API.savedUser(), acc = API.savedAccess(), quick = !!(saved && acc && acc.perms);
+    if (quick) { state.user = saved; state.perms = acc.perms; state.isAdmin = !!acc.isAdmin; state.write = acc.write || null; afterSignIn(); }
+    API.call('me').then(function (r) {
+      var before = JSON.stringify([state.perms, state.isAdmin, state.write]);
+      state.user = r.user; takePerms(r);
+      if (!quick) return afterSignIn();
+      if (JSON.stringify([state.perms, state.isAdmin, state.write]) !== before) render();
+    }).catch(function (e) {
         if (e && e.code === 'auth') { API.clearSession(); return go('login'); }
-        state.user = API.savedUser(); go(state.user ? 'search' : 'login');
+        if (!quick) { state.user = API.savedUser(); go(state.user ? 'search' : 'login'); }
         toast(e.message);
       });
   }
