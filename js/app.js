@@ -1818,7 +1818,7 @@ function renderEditor() {
       '<h2>Photos from your iPad in a report</h2><p>In a report, tap <b>&#8646;</b> on a slot or <b>+ Add photo to this section</b> to take a picture or pick one from your Photos. It stays on the device until you tap <b>Generate PDF</b>; the app then asks whether to save those new photos to the job in JobTread. Say No if one was a mistake, remove it with &times;, and generate again.</p>' +
       '<h2>Share the app with a co-worker</h2><p>Settings &rsaquo; <b>Share this app</b> sends the link by Messages, Mail or AirDrop (or copies it). They sign in with their own work email; an Admin sets what they can do.</p>' +
       '<h2>Something looks old or broken?</h2><p>Settings &rsaquo; <b>Refresh</b> loads the newest version. Your unfinished report comes back by itself.</p>' +
-      '<h2>Signing in</h2><p>Use your work email. A 6-digit code arrives by email; it works for 10 minutes. You stay signed in for 12 hours.</p>' +
+      '<h2>Signing in</h2><p>Use your work email. A 6-digit code arrives by email; it works for 10 minutes. You stay signed in for 300 days on this device.</p>' +
       '<h2>Can\'t save or upload?</h2><p>Your JobTread key is not set up yet. Ask Jason.</p>' +
       '<p class="small muted">HCI JobTread App &middot; questions: info@hcisf.com</p></main>';
   }
