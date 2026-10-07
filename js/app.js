@@ -122,7 +122,7 @@
     app.innerHTML =
       '<main class="center"><div class="card login">' +
       '<img class="logo" src="icons/logo.jpg" alt="HCI">' +
-      '<h1>HCI JobTread App</h1>' +
+      '<h1>HCI App</h1>' +
       (codeStep
         ? '<p class="muted">We sent a 6-digit code to<br><b>' + esc(state.email) + '</b></p>' +
           '<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="------" aria-label="6-digit code">' +
@@ -157,7 +157,7 @@
   /* ------------------------------------------------------------------ job search */
   function renderSearch() {
     app.innerHTML =
-      '<header class="topbar"><img class="logo-sm" src="icons/logo.jpg" alt="HCI"><div class="grow"><div class="title">HCI JobTread App</div></div>' +
+      '<header class="topbar"><img class="logo-sm" src="icons/logo.jpg" alt="HCI"><div class="grow"><div class="title">HCI App</div></div>' +
       '<span class="small muted userName">' + esc(state.user ? state.user.name : '') + '</span>' +
       (can('tasks') ? '<button class="btn small" data-act="tasks">&#9745; My tasks</button>' : '') +
       settingsMenu() + '</header>' +
@@ -448,9 +448,9 @@
 // never a sign-in; the other person signs in with their own work email.
 function appLink() { return location.origin + location.pathname; }
 function shareApp() {
-  var url = appLink(), text = 'HCI JobTread App - sign in with your work email: ' + url;
+  var url = appLink(), text = 'HCI App - sign in with your work email: ' + url;
   if (navigator.share) {
-    navigator.share({ title: 'HCI JobTread App', text: 'Sign in with your work email.', url: url })
+    navigator.share({ title: 'HCI App', text: 'Sign in with your work email.', url: url })
       .catch(function (e) { if (e && e.name !== 'AbortError') copyLink(url); });
     return;
   }
@@ -1829,7 +1829,7 @@ function renderEditor() {
       '<h2>Something looks old or broken?</h2><p>Settings &rsaquo; <b>Refresh</b> loads the newest version. Your unfinished report comes back by itself.</p>' +
       '<h2>Signing in</h2><p>Use your work email. A 6-digit code arrives by email; it works for 10 minutes. You stay signed in on this device until you sign out.</p>' +
       '<h2>Can\'t save or upload?</h2><p>Your JobTread key is not set up yet. Ask Jason.</p>' +
-      '<p class="small muted">HCI JobTread App &middot; questions: info@hcisf.com</p></main>';
+      '<p class="small muted">HCI App &middot; questions: info@hcisf.com</p></main>';
   }
 
   /* ------------------------------------------------------------------ events */
