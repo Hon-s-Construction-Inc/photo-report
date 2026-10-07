@@ -363,13 +363,15 @@
   }
 
   /* ------------------------------------------------------------------ editor */
-  function draftKey() { return 'hci_pr_draft_' + state.job.id; }
+  // Drafts belong to the person signed in, so a shared iPad never shows someone else's report or name.
+  function draftKey() { return 'hci_pr_draft_' + ((state.user && state.user.email) || '').toLowerCase() + '_' + state.job.id; }
+  function legacyDraftKey() { return 'hci_pr_draft_' + state.job.id; }
 
   function openEditor(job, files) {
     state.job = { id: job.id, name: job.name };
     state.files = files; state.byId = {}; files.forEach(function (f) { state.byId[f.id] = f; });
     state.selected = []; state.sortDesc = true; state.pdf = null; state.saved = false; state.replacing = null;
-    state.sections = []; state.entries = {};
+    state.sections = []; state.entries = {}; state.legacyDraft = false;
     state.report = {
       title: job.name + ' Photo Report',
       author: state.user ? titleCase(state.user.name) : '',
@@ -377,13 +379,16 @@
       layout: 'stack'
     };
     try {
-      var d = JSON.parse(localStorage.getItem(draftKey()) || 'null');
+      var d = JSON.parse(localStorage.getItem(draftKey()) || 'null'), legacy = false;
+      // A draft from before drafts were per person: keep its photos, but not the name in Prepared by.
+      if (!d) { d = JSON.parse(localStorage.getItem(legacyDraftKey()) || 'null'); legacy = !!d; }
+      state.legacyDraft = legacy;
       if (d && d.sections) {
         state.sections = d.sections.map(function (s) {
           return { title: s.title || '', note: s.note || '', fids: (s.fids || []).filter(function (id) { return state.byId[id]; }) };
         });
         state.entries = d.entries || {};
-        if (d.report) { state.report.title = d.report.title || state.report.title; state.report.author = d.report.author || state.report.author; }
+        if (d.report) { state.report.title = d.report.title || state.report.title; if (!legacy) state.report.author = d.report.author || state.report.author; }
         var wasSide = (d.report && d.report.layout === 'side') || (!(d.report && d.report.layout) && d.sections.some(function (x) { return x.layout === 'side'; }));
         state.report.layout = wasSide ? 'side' : 'stack';
         if (state.sections.length) setTimeout(function () { toast('Restored your unfinished report for this job.'); }, 300);
@@ -420,7 +425,11 @@
   function flushDraft() {
     clearTimeout(saveTimer);
     if (!state.job) return;
-    try { localStorage.setItem(draftKey(), JSON.stringify({ sections: state.sections, entries: state.entries, report: state.report })); } catch (e) { /* storage full */ }
+    try {
+      localStorage.setItem(draftKey(), JSON.stringify({ sections: state.sections, entries: state.entries, report: state.report }));
+      // The old shared draft now lives under this person's name, so it moves rather than showing for everyone.
+      if (state.legacyDraft) { localStorage.removeItem(legacyDraftKey()); state.legacyDraft = false; }
+    } catch (e) { /* storage full */ }
   }
   function saveDraft() {
     clearTimeout(saveTimer);
