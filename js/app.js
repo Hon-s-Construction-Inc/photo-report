@@ -337,7 +337,7 @@
   function renderActiveJobs() {
     var box = $('#activeJobs'); if (!box) return;
     var wo = woIds(), list = state.active && state.active.filter(function (j) { return !wo[j.id]; });
-    setCount('#activeCnt', list);
+    setCount('#activeCnt', state.activeFailed ? null : list);
     if (!list) { box.innerHTML = '<p class="small muted">Loading jobs...</p>'; return; }
     if (!list.length) { box.innerHTML = '<p class="small muted">' + (state.activeFailed ? 'Could not load the job list.' : 'No jobs in the chosen phases.') + '</p>'; return; }
     box.innerHTML = jobListHtml(list);
@@ -350,9 +350,9 @@
   }
   function renderWoJobs() {
     var box = $('#woJobs'); if (!box) return;
-    setCount('#woCnt', state.wo);
+    setCount('#woCnt', state.woFailed ? null : state.wo);
     if (!state.wo) { box.innerHTML = '<p class="small muted">Loading work orders...</p>'; return; }
-    if (!state.wo.length) { box.innerHTML = '<p class="small muted">' + (state.woFailed ? 'Could not load the work orders.' : 'No open work orders.') + '</p>'; return; }
+    if (!state.wo.length) { box.innerHTML = '<p class="small muted">' + (state.woFailed ? 'Could not load the work orders. If this stays, the latest Code.gs is not deployed yet.' : 'No open work orders.') + '</p>'; return; }
     box.innerHTML = jobListHtml(state.wo);
   }
   function setCount(sel, list) { var el = $(sel); if (el) el.textContent = list ? '(' + list.length + ')' : ''; }
