@@ -261,7 +261,7 @@
   // Settings dropdown: Refresh, Help, (Users and access for Admins), Sign out.
   function settingsMenu() {
     return '<div class="dd"><button class="btn small" data-act="menu" aria-haspopup="true" aria-expanded="false">&#9881; Settings &#9662;</button>' +
-      '<div class="ddm" hidden><button data-act="refreshApp">&#8635; Refresh (get the newest version)</button>' +
+      '<div class="ddm" hidden><button data-act="refreshApp">&#8635; Refresh</button>' +
       '<button data-act="help">? Help</button>' +
       '<button data-act="shareApp">&#128279; Share this app</button>' +
       (state.isAdmin ? '<button data-act="admin">&#128100; Users and access</button>' : '') +
