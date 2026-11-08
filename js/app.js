@@ -176,6 +176,8 @@
   }
 
   // Private notes on a job: kept only on this device, for the signed-in person. Never sent to JobTread or the server.
+  // KEEP THEM SAFE: keys start with "hci_pr_note_". No upgrade, sign-out or clean-up may remove them; only the person's
+  // own "Delete note" does. Do not rename the key format (old notes would look lost).
   function noteKey(id) { return 'hci_pr_note_' + ((state.user && state.user.email) || '').toLowerCase() + '_' + id; }
   function noteGet(id) { try { var n = JSON.parse(localStorage.getItem(noteKey(id)) || 'null'); return n && n.text ? n : null; } catch (e) { return null; } }
   function noteSet(id, text) {
@@ -2236,7 +2238,10 @@ function renderEditor() {
   });
 
   /* ------------------------------------------------------------------ start */
+  // Ask the browser to keep this site's saved data (notes, drafts, My jobsite) even when the device is low on space.
+  function keepStorage() { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) { /* older browser */ } }
   function start() {
+    keepStorage();
     if (!API.hasSession()) return go('login');
     // Open straight away with what this device knew last time; the server check runs in the background
     // and the screen is redrawn only if something changed (new switches, signed out, etc.).
