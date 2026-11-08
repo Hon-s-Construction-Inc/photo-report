@@ -101,6 +101,8 @@
     else if (state.view === 'help') renderHelp();
     else if (state.view === 'gallery') renderGallery();
     else if (state.view === 'todos') renderTodos();
+    else if (state.view === 'newjob') renderNewJob();
+    else if (state.view === 'movetemp') renderMoveTemp();
   }
 
   function handleError(err, msgEl) {
@@ -170,8 +172,9 @@
       '<div class="cols"><section class="col"><div class="lab labrow">My jobsite</div>' + listTools('my') + '<div id="myJobs"></div></section>' +
       '<section class="col act"><div class="lab labrow">Action</div><div class="ltools stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
       '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + '</div>' + listTools('active') + '<div id="activeJobs"></div></section>' +
-      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + '</div>' + listTools('wo') + '<div id="woJobs"></div></section></div></main>';
-    renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs();
+      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + '</div>' + listTools('wo') + '<div id="woJobs"></div></section>' +
+      '<section class="col tmp" id="tempCol" hidden><div class="lab labrow">Temporary jobs <b class="cnt" id="tempCnt"></b> <span class="small muted">&middot; customer not known yet</span></div><div id="tempJobs"></div></section></div></main>';
+    renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs(); loadTemps();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
 
@@ -208,7 +211,8 @@
     var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
     // Three places, each for looking AND adding: To-do list (+ Add a to-do), Files and plans (Upload),
     // Photos (Upload photos, Make a report).
-    var items = o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload')) +
+    var tmp = j && j.temp;   // a temporary job only has photos until an Admin moves it to a real job
+    var items = (tmp ? '' : o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload'))) +
       o('goGallery', 'Photos', can('photos') || can('report') || can('upload'));
     var box = $('#actionBox'); if (!box) return;
     if (!items) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
@@ -250,17 +254,20 @@
     $$('.dd > .btn, #actionSel').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
 
+  function newJobRow() {
+    return can('newJob') && state.perms && state.perms.newJob === true ? '<button class="newjobrow" data-act="newJob">+ New (Temporary) Job<span class="small muted">Can\'t find it? Start it here and add photos now.</span></button>' : '';
+  }
   function renderResults() {
     var box = $('#results'); if (!box) return;
     if (state.query.trim().length < 2) { box.innerHTML = ''; }
-    else if (!state.jobs.length) { box.innerHTML = '<p class="muted">No jobs found. Try fewer words or just the house number.</p>'; }
+    else if (!state.jobs.length) { box.innerHTML = '<p class="muted">No jobs found. Try fewer words or just the house number.</p>' + newJobRow(); }
     else {
       box.innerHTML = state.jobs.map(function (j) {
         var picked = state.pickedJob && state.pickedJob.id === j.id;
         return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
           '<span class="name">' + esc(jn(j)) + '<div class="sub">Created ' + esc(fmtShort(j.createdAt)) + '</div></span>' +
           '<span class="badge' + (j.photoCount ? ' has' : '') + '">' + (j.photoCount ? 'Has photos' : 'No photos') + '</span></button></div>';
-      }).join('');
+      }).join('') + newJobRow();
     }
   }
 
@@ -427,7 +434,7 @@
     box.innerHTML = '<div class="results">' + shown.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       var x = '<button class="star unstar" data-act="unstar" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-label="Remove from My jobsite" title="Remove from My jobsite">&times;</button>';
-      return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + noteMark(j) + '</span></button></div>';
+      return '<div class="jobrow hasgo">' + x + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + noteMark(j) + '</span></button>' + goBtn(j) + '</div></div>';
     }).join('') + '</div>';
   }
 
@@ -481,9 +488,18 @@
       var st = mine ? '<span class="stbub" title="Change Status">▾<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Change Status of ' + esc(jn(j)) + '">' +
           opts.map(function (o) { return '<option' + (o === j.phase ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
           (opts.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select></span>' : '';
-      return '<div class="jobrow' + (mine ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-        '<span class="name">' + esc(jn(j)) + noteMark(j) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button>' + st + '</div></div>';
+      return '<div class="jobrow hasgo' + (mine ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
+        '<span class="name">' + esc(jn(j)) + noteMark(j) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button>' + st + goBtn(j) + '</div></div>';
     }).join('') + '</div>';
+  }
+  // → on a job: pick it and open the Action menu straight away.
+  function goBtn(j) { return '<button class="gobtn" data-act="goAct" data-id="' + esc(j.id) + '" title="Actions for this job" aria-label="Actions for ' + esc(jn(j)) + '">&#8594;</button>'; }
+  function allKnownJobs() { return state.jobs.concat(state.myJobs, state.active || [], state.wo || [], state.temps || []); }
+  function pickJob(id) {
+    var pj = allKnownJobs().filter(function (j) { return j.id === id; })[0] || null;
+    if (pj) pj = pj.temp ? pj : { id: pj.id, name: pj.name };
+    state.pickedJob = pj;
+    renderResults(); renderMyJobs(); renderActiveJobs(); renderWoJobs(); renderTemps(); renderActions();
   }
   function changeStatus(sel) {
     var id = sel.dataset.id, to = sel.value;
@@ -1810,11 +1826,11 @@ function renderEditor() {
     { title: 'Files and plans', keys: ['files', 'costFiles'] },
     { title: 'Photos', keys: ['photos', 'upload', 'report', 'saveJT'] },
     { title: 'Top bar', keys: ['tasks'] },
-    { title: 'Job lists on home', keys: ['status'] }
+    { title: 'Job lists on home', keys: ['status', 'newJob'] }
   ];
   var PERM_WORDS = {
     todo: 'See, add and tick off to-dos', files: 'See plans and job files', costFiles: 'Also see cost folders (invoices, subs, pay apps)',
-    photos: 'See job photos', upload: 'Upload photos and files', report: 'Make photo reports (PDF)', saveJT: 'Save the report PDF into JobTread', tasks: 'My tasks', status: 'Change a job\'s Status (Active jobs and Work orders)'
+    photos: 'See job photos', upload: 'Upload photos and files', report: 'Make photo reports (PDF)', saveJT: 'Save the report PDF into JobTread', tasks: 'My tasks', status: 'Change a job\'s Status (Active jobs and Work orders)', newJob: 'Start a new (temporary) job from Find job'
   };
   function permGroups(defs, one) {
     var seen = {};
@@ -1998,6 +2014,137 @@ function renderEditor() {
   }
 
   /* ------------------------------------------------------------------ Help */
+  /* ------------------------------------------------------------------ new job from the field */
+  // Temporary jobs (customer not known yet) live as folders in the JobTread job "Temporary Job Site" until an Admin
+  // moves their photos to the real job. Admins and people allowed to start jobs see them in a list on the home screen.
+  var tempsAt = 0;
+  function loadTemps(force) {
+    if (!(state.isAdmin || (state.perms && state.perms.newJob === true))) return;
+    if (!force && state.temps && Date.now() - tempsAt < 120000) return renderTemps();
+    API.call('tempJobs').then(function (r) { state.temps = r.jobs || []; tempsAt = Date.now(); renderTemps(); })
+      .catch(function (e) { if (e && e.code === 'auth') handleError(e); });
+  }
+  function renderTemps() {
+    var col = $('#tempCol'), box = $('#tempJobs'); if (!col || !box) return;
+    var list = state.temps || [];
+    col.hidden = !list.length;
+    var c = $('#tempCnt'); if (c) c.textContent = '(' + list.length + ')';
+    box.innerHTML = '<div class="results">' + list.map(function (j) {
+      var picked = state.pickedJob && state.pickedJob.id === j.id;
+      return '<div class="jobrow hasgo"><span class="star tempmark" aria-hidden="true">T</span><div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
+        '<span class="name">' + esc(j.longName.replace(/^TEMP: /, '')) + noteMark(j) + '</span><span class="phase">' + esc((j.by || '') + ' \u00b7 ' + fmtShort(j.at) + ' \u00b7 ' + (j.photos || 0) + ' photo' + (j.photos === 1 ? '' : 's')) + '</span></button>' +
+        goBtn(j) + '</div>' + (state.isAdmin ? '<button class="btn small movebtn" data-act="moveTemp" data-id="' + esc(j.id) + '">Move to job&hellip;</button>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function openNewJob() {
+    state.nj = { name: state.query.trim(), address: '', note: '', mode: 'temp', cust: null, custQ: '', custs: [] };
+    go('newjob');
+  }
+  function renderNewJob() {
+    var n = state.nj;
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="njBack">&larr; Back</button><div class="grow"><div class="title">New job</div></div></header>' +
+      '<main class="page newjob"><div class="card">' +
+      '<label class="lab" for="njName">Job name</label><input id="njName" maxlength="100" value="' + esc(n.name) + '" placeholder="e.g. 2560 Oak St bathroom leak">' +
+      '<label class="lab" for="njAddr">Address <span class="small muted">(if known)</span></label><input id="njAddr" maxlength="200" value="' + esc(n.address) + '" placeholder="Street, city">' +
+      '<label class="lab" for="njNote">Note for the office <span class="small muted">(optional)</span></label><textarea id="njNote" rows="3" maxlength="1000" placeholder="Who called, what is needed...">' + esc(n.note) + '</textarea>' +
+      '<div class="lab">Customer</div><div class="njmode">' +
+      '<button class="' + (n.mode === 'temp' ? 'on' : '') + '" data-act="njMode" data-mode="temp">Not known yet</button>' +
+      '<button class="' + (n.mode === 'cust' ? 'on' : '') + '" data-act="njMode" data-mode="cust">Existing customer</button></div>' +
+      (n.mode === 'temp' ? '<p class="small muted">Saved as a <b>temporary job</b>. You can add photos right away. The office gets an email, makes the real job in JobTread later, and moves your photos there.</p>'
+        : (n.cust ? '<div class="njcust"><b>' + esc(n.cust.name) + '</b> <button class="link small" data-act="njCustClear">Change</button></div>'
+          : '<input id="njCustQ" type="search" placeholder="Type the customer name" value="' + esc(n.custQ) + '" autocomplete="off"><div id="njCusts" class="results"></div>') +
+          '<p class="small muted">A real JobTread job is made now under this customer, with Status \u201cA New Lead\u201d. The office gets an email to fill in the rest.</p>') +
+      '<button class="btn primary big" data-act="njCreate"' + (n.busy ? ' disabled' : '') + '>' + (n.busy ? 'Saving...' : (n.mode === 'temp' ? 'Start temporary job' : 'Create job in JobTread')) + '</button>' +
+      '<p class="small msg" id="njMsg"></p></div></main>';
+    paintCusts();
+  }
+  function paintCusts() {
+    var box = $('#njCusts'); if (!box) return;
+    var n = state.nj;
+    box.innerHTML = n.custQ.trim().length < 2 ? '' : !n.custs.length ? '<p class="small muted">No customer found. Use \u201cNot known yet\u201d instead.</p>' :
+      n.custs.map(function (c, i) { return '<button class="job" data-act="njPickCust" data-i="' + i + '"><span class="name">' + esc(c.name) + '</span></button>'; }).join('');
+  }
+  var custTimer;
+  function onCustSearch(v) {
+    var n = state.nj; n.custQ = v; clearTimeout(custTimer);
+    if (v.trim().length < 2) { n.custs = []; return paintCusts(); }
+    custTimer = setTimeout(function () {
+      API.call('customers', { q: v }).then(function (r) { if (state.nj === n) { n.custs = r.customers || []; paintCusts(); } }).catch(handleError);
+    }, 300);
+  }
+  function njKeep() { var n = state.nj; ['Name', 'Addr', 'Note'].forEach(function (k) { var el = $('#nj' + k); if (el) n[{ Name: 'name', Addr: 'address', Note: 'note' }[k]] = el.value; }); }
+  function createNewJob() {
+    njKeep();
+    var n = state.nj;
+    if (n.name.trim().length < 3) return setMsg('Type a job name.');
+    if (n.mode === 'cust' && !n.cust) return setMsg('Pick the customer, or choose \u201cNot known yet\u201d.');
+    n.busy = true; renderNewJob();
+    API.call('newJob', { name: n.name, address: n.address, note: n.note, customerId: n.mode === 'cust' ? n.cust.id : '' }).then(function (r) {
+      n.busy = false;
+      var j = r.job;
+      if (r.temp) { state.temps = [j].concat(state.temps || []); tempsAt = 0; }
+      else { state.myJobs = sortMyJobs(state.myJobs.concat([{ id: j.id, name: j.name, longName: j.longName }])); saveMyJobs(); }
+      state.pickedJob = j.temp ? j : { id: j.id, name: j.name, longName: j.longName };
+      state.query = ''; state.jobs = [];
+      go('search');
+      toast(r.temp ? 'Temporary job started. Add photos now: Action \u2192 Photos.' : 'Job created in JobTread and added to My jobsite.');
+    }).catch(function (e) { n.busy = false; renderNewJob(); handleError(e, $('#njMsg')); });
+  }
+
+  /* --- Admin: move a temporary job's photos to the real job */
+  function openMoveTemp(id) {
+    var tj = (state.temps || []).filter(function (x) { return x.id === id; })[0]; if (!tj) return;
+    state.mv = { temp: tj, q: '', jobs: [], target: null, busy: false };
+    go('movetemp');
+  }
+  function renderMoveTemp() {
+    var m = state.mv, tj = m.temp;
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="mvBack">&larr; Back</button><div class="grow"><div class="title">Move temporary job</div></div></header>' +
+      '<main class="page newjob"><div class="card">' +
+      '<p><b>' + esc(tj.longName.replace(/^TEMP: /, '')) + '</b><br><span class="small muted">' + esc((tj.by || '') + ' \u00b7 ' + fmtShort(tj.at) + ' \u00b7 ' + (tj.photos || 0) + ' photos' + (tj.address ? ' \u00b7 ' + tj.address : '')) + '</span></p>' +
+      (tj.note ? '<p class="small">Note: ' + esc(tj.note) + '</p>' : '') +
+      '<label class="lab" for="mvQ">Real job in JobTread</label>' +
+      (m.target ? '<div class="njcust"><b>' + esc(jn(m.target)) + '</b> <button class="link small" data-act="mvClear">Change</button></div>'
+        : '<input id="mvQ" type="search" autocomplete="off" placeholder="House number and street" value="' + esc(m.q) + '"><div id="mvJobs" class="results"></div>') +
+      '<p class="small muted">Make the real job in JobTread first. Every photo is copied into its <b>Photos</b> folder with its comment and tags. The originals are kept in \u201cTemporary Job Site\u201d (folder Temporary / Moved).</p>' +
+      '<button class="btn primary big" data-act="mvGo"' + (!m.target || m.busy ? ' disabled' : '') + '>' + (m.busy ? 'Moving...' : 'Move photos') + '</button>' +
+      '<p class="small msg" id="mvMsg"></p></div></main>';
+    paintMvJobs();
+  }
+  function paintMvJobs() {
+    var box = $('#mvJobs'); if (!box) return;
+    var m = state.mv;
+    box.innerHTML = m.q.trim().length < 2 ? '' : !m.jobs.length ? '<p class="small muted">No job found.</p>' :
+      m.jobs.map(function (j, i) { return '<button class="job" data-act="mvPick" data-i="' + i + '"><span class="name">' + esc(jn(j)) + '</span></button>'; }).join('');
+  }
+  var mvTimer;
+  function onMvSearch(v) {
+    var m = state.mv; m.q = v; clearTimeout(mvTimer);
+    if (v.trim().length < 2) { m.jobs = []; return paintMvJobs(); }
+    mvTimer = setTimeout(function () {
+      API.call('searchJobs', { q: v }).then(function (r) { if (state.mv === m) { m.jobs = (r.jobs || []).filter(function (j) { return j.name !== 'Temporary Job Site'; }); paintMvJobs(); } }).catch(handleError);
+    }, 300);
+  }
+  function runMove() {
+    var m = state.mv; if (!m.target) return;
+    if (!confirm('Copy all photos of\n' + m.temp.longName.replace(/^TEMP: /, '') + '\n\ninto\n' + jn(m.target) + '?')) return;
+    m.busy = true; renderMoveTemp();
+    var copied = 0;
+    (function step() {
+      overlay(true, 'Copying photos... ' + copied + (m.temp.photos ? ' of ' + m.temp.photos : ''), m.temp.photos ? copied / m.temp.photos * 100 : 50);
+      API.call('moveTemp', { tempId: m.temp.id.replace(/^T~/, ''), targetJobId: m.target.id }).then(function (r) {
+        copied += r.copied;
+        if (!r.done && r.copied) return step();
+        overlay(false); m.busy = false;
+        state.temps = (state.temps || []).filter(function (x) { return x.id !== m.temp.id; });
+        if (state.pickedJob && state.pickedJob.id === m.temp.id) state.pickedJob = { id: m.target.id, name: m.target.name };
+        go('search'); toast(copied + ' photo' + (copied === 1 ? '' : 's') + ' moved to ' + (r.jobName || 'the job') + '.');
+      }).catch(function (e) { overlay(false); m.busy = false; renderMoveTemp(); handleError(e, $('#mvMsg')); });
+    })();
+  }
+
   function renderHelp() {
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="helpBack">&larr; Back</button><div class="grow"><div class="title">Help</div></div>' + settingsMenu() + '</header>' +
@@ -2032,12 +2179,29 @@ function renderEditor() {
       case 'verify': return doVerify();
       case 'useOther': state.loginStep = 'email'; return renderLogin();
       case 'signOut': API.clearSession(); state.user = null; state.loginStep = 'email'; return go('login');
+      case 'newJob': return openNewJob();
+      case 'njBack': return go('search');
+      case 'njMode': njKeep(); state.nj.mode = el.dataset.mode; return renderNewJob();
+      case 'njPickCust': njKeep(); state.nj.cust = state.nj.custs[Number(el.dataset.i)]; return renderNewJob();
+      case 'njCustClear': njKeep(); state.nj.cust = null; return renderNewJob();
+      case 'njCreate': return createNewJob();
+      case 'moveTemp': return openMoveTemp(el.dataset.id);
+      case 'mvBack': return go('search');
+      case 'mvPick': state.mv.target = state.mv.jobs[Number(el.dataset.i)]; return renderMoveTemp();
+      case 'mvClear': state.mv.target = null; return renderMoveTemp();
+      case 'mvGo': return runMove();
+      case 'goAct': {
+        pickJob(el.dataset.id);
+        var ab = $('#actionBox'); if (ab) ab.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        setTimeout(function () { var m = $('#actMenu'); if (m && m.hidden) toggleActMenu(); }, 60);
+        return;
+      }
       case 'pick': {
-        var pj = state.jobs.concat(state.myJobs, state.active || [], state.wo || []).filter(function (j) { return j.id === el.dataset.id; })[0] || null;
-        if (pj) pj = { id: pj.id, name: pj.name };
+        var pj = allKnownJobs().filter(function (j) { return j.id === el.dataset.id; })[0] || null;
+        if (pj) pj = pj.temp ? pj : { id: pj.id, name: pj.name };
         state.pickedJob = pj && state.pickedJob && state.pickedJob.id === pj.id ? state.pickedJob : pj;
         if (el.closest('#results')) { state.query = ''; state.jobs = []; var qi = $('#q'); if (qi) qi.value = ''; }
-        renderResults(); renderMyJobs(); renderActiveJobs(); renderWoJobs(); return renderActions();
+        renderResults(); renderMyJobs(); renderActiveJobs(); renderWoJobs(); renderTemps(); return renderActions();
       }
       case 'menu': { ev.stopPropagation(); var m = el.nextElementSibling, open = m.hidden; closeMenus(); m.hidden = !open; el.setAttribute('aria-expanded', open); return; }
       case 'help': closeMenus(); return go('help');
@@ -2154,6 +2318,8 @@ function renderEditor() {
     var t = ev.target;
     if (t.id === 'q') return onSearchInput(t.value);
     if (t.id === 'upq') return onUpSearch(t.value);
+    if (t.id === 'njCustQ') return onCustSearch(t.value);
+    if (t.id === 'mvQ') return onMvSearch(t.value);
     if (t.id === 'noteText' && state.pickedJob) {
       var had = !!noteGet(state.pickedJob.id);
       if (!noteSet(state.pickedJob.id, t.value)) { toast('Could not save the note: this device is out of space.'); return; }
