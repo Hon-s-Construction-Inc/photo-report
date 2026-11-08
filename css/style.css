@@ -497,7 +497,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .cols > .col.act { grid-area: act; }
 .cols > .col.active { grid-area: active; }
 .cols > .col.wo { grid-area: wo; }
-@media (max-width: 760px) { .cols { grid-template-areas: "my" "act" "active" "wo"; } }
+@media (max-width: 760px) { .cols { grid-template-areas: "act" "my" "active" "wo"; } }   /* phones: Action first, then My jobsite */
 .home :is(#activeJobs, #woJobs) { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; max-height: 60vh; overflow: auto; -webkit-overflow-scrolling: touch; }
 .home :is(#activeJobs, #woJobs) .results { gap: 6px; }
 .home :is(#activeJobs, #woJobs) .job { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
