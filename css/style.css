@@ -530,3 +530,4 @@ html.net-busy body::before { content: ""; position: fixed; top: 0; left: 0; righ
 
 /* Long job names ("Project Long Name"): wrap to two lines instead of cutting off */
 .myjob .name, .topbar .title { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; }
+.home .cols .lab .cnt { color: var(--blue); font-weight: 700; }

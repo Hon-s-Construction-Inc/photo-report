@@ -169,8 +169,8 @@
       '<div class="selbox" id="selbox"></div>' +
       '<div class="cols"><section class="col"><div class="lab">My jobsite</div><div id="myJobs"></div></section>' +
       '<section class="col act"><div class="lab">Action</div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab">Active jobs <span class="small muted">&middot; tap + to add to My jobsite</span></div><div id="activeJobs"></div></section>' +
-      '<section class="col wo"><div class="lab">Work orders <span class="small muted">&middot; open</span></div><div id="woJobs"></div></section></div></main>';
+      '<section class="col active"><div class="lab">Active jobs <b class="cnt" id="activeCnt"></b> <span class="small muted">&middot; tap + to add to My jobsite</span></div><div id="activeJobs"></div></section>' +
+      '<section class="col wo"><div class="lab">Work orders <b class="cnt" id="woCnt"></b> <span class="small muted">&middot; open</span></div><div id="woJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
@@ -337,6 +337,7 @@
   function renderActiveJobs() {
     var box = $('#activeJobs'); if (!box) return;
     var wo = woIds(), list = state.active && state.active.filter(function (j) { return !wo[j.id]; });
+    setCount('#activeCnt', list);
     if (!list) { box.innerHTML = '<p class="small muted">Loading jobs...</p>'; return; }
     if (!list.length) { box.innerHTML = '<p class="small muted">' + (state.activeFailed ? 'Could not load the job list.' : 'No jobs in the chosen phases.') + '</p>'; return; }
     box.innerHTML = jobListHtml(list);
@@ -349,10 +350,12 @@
   }
   function renderWoJobs() {
     var box = $('#woJobs'); if (!box) return;
+    setCount('#woCnt', state.wo);
     if (!state.wo) { box.innerHTML = '<p class="small muted">Loading work orders...</p>'; return; }
     if (!state.wo.length) { box.innerHTML = '<p class="small muted">' + (state.woFailed ? 'Could not load the work orders.' : 'No open work orders.') + '</p>'; return; }
     box.innerHTML = jobListHtml(state.wo);
   }
+  function setCount(sel, list) { var el = $(sel); if (el) el.textContent = list ? '(' + list.length + ')' : ''; }
   function jobListHtml(list) {
     return '<div class="results">' + sortMyJobs(list).map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
