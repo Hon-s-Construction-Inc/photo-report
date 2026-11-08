@@ -573,16 +573,19 @@ details.user .ucount { margin-left: auto; }
 .home .stf .stfm .perm { min-height: 40px; }
 @media (max-width: 760px) { .home .stf-spacer { display: none; } }
 
-/* Search box in each home list header: a rounded field with a magnifier, text from the left */
-.home .cols .lab input.listq {
-  margin: 0 0 0 auto; flex: 0 0 auto; width: 210px; max-width: 55%; height: 34px; min-height: 0;
-  padding: 0 12px 0 32px; border: 1px solid #d0d5dd; border-radius: 999px; background-color: #fff;
+/* Under each home list title: search box as wide as the list, Status filter at its right */
+.home .ltools { display: flex; align-items: center; gap: 8px; height: 36px; margin: 0 0 8px; }
+.home .ltools input.listq {
+  flex: 1 1 auto; width: auto; min-width: 0; height: 36px; min-height: 0; margin: 0;
+  padding: 0 12px 0 34px; border: 1px solid #d0d5dd; border-radius: 999px; background-color: #fff;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: 11px center; background-size: 15px 15px;
-  font-size: 14px; font-weight: 400; color: #101828; text-align: left; text-transform: none; letter-spacing: 0;
+  background-repeat: no-repeat; background-position: 12px center; background-size: 15px 15px;
+  font-size: 15px; font-weight: 400; color: #101828; text-align: left;
   box-shadow: 0 1px 2px rgba(16,24,40,.05); -webkit-appearance: none; appearance: none;
 }
-.home .cols .lab input.listq::placeholder { color: #98a2b3; text-align: left; }
-.home .cols .lab input.listq:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(11,107,211,.15); }
-.home .cols .lab input.listq::-webkit-search-cancel-button { cursor: pointer; }
-.home .stf details.stfd > summary { border-radius: 999px; border-color: #d0d5dd; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+.home .ltools input.listq::placeholder { color: #98a2b3; }
+.home .ltools input.listq:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(11,107,211,.15); }
+.home .ltools .stf { flex: 0 0 auto; min-height: 0; margin: 0; }
+.home .ltools .stf details.stfd > summary { height: 36px; white-space: nowrap; }
+.home .ltools .stf .stfm { left: auto; right: 0; top: 40px; }
+@media (max-width: 760px) { .home .ltools.stf-spacer { display: none; } }

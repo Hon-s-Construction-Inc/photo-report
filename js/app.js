@@ -167,10 +167,10 @@
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div>' +
-      '<div class="cols"><section class="col"><div class="lab labrow">My jobsite' + listSearch('my') + '</div><div class="stf" id="stf-my"></div><div id="myJobs"></div></section>' +
-      '<section class="col act"><div class="lab labrow">Action</div><div class="stf stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + listSearch('active') + '</div><div class="stf" id="stf-active"></div><div id="activeJobs"></div></section>' +
-      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + listSearch('wo') + '</div><div class="stf" id="stf-wo"></div><div id="woJobs"></div></section></div></main>';
+      '<div class="cols"><section class="col"><div class="lab labrow">My jobsite</div>' + listTools('my') + '<div id="myJobs"></div></section>' +
+      '<section class="col act"><div class="lab labrow">Action</div><div class="ltools stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
+      '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + '</div>' + listTools('active') + '<div id="activeJobs"></div></section>' +
+      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + '</div>' + listTools('wo') + '<div id="woJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
@@ -334,6 +334,8 @@
     var v = (state.listQ && state.listQ[k]) || '';
     return '<input type="search" class="listq" data-list="' + k + '" placeholder="Search this list" aria-label="Search this list" autocomplete="off" value="' + esc(v) + '">';
   }
+  // Under each list title: a search box as wide as the list, with the Status filter at its right.
+  function listTools(k) { return '<div class="ltools">' + listSearch(k) + '<div class="stf" id="stf-' + k + '"></div></div>'; }
   function listFilter(k, list) {
     if (!list) return list;
     var q = String((state.listQ && state.listQ[k]) || '').toLowerCase().trim();
