@@ -1726,7 +1726,7 @@ function renderEditor() {
     else {
       var defs = (a.perms || []).map(function (p) { return typeof p === 'string' ? { key: p, label: p } : p; });
       var feats = a.features || {};
-      body = '<section class="user feats"><div class="uhead"><b>Buttons for everyone</b><span class="small muted">Company-wide. A button switched off here is hidden for every Project Manager, whatever their personal switch says. Admins always see everything.</span></div>' +
+      body = '<section class="user feats"><div class="uhead"><b>Buttons for everyone</b><span class="small muted">Company-wide. A button switched off here is hidden for every Project Manager and Operations Manager, whatever their personal switch says. Admins always see everything.</span></div>' +
         permGroups(defs, function (d) {
           return '<label class="perm"><input type="checkbox" class="featchk" data-perm="' + esc(d.key) + '"' + (feats[d.key] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + '</span></label>';
         }) +
@@ -1754,7 +1754,7 @@ function renderEditor() {
       '<header class="topbar"><button class="btn small" data-act="adminBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">Admin &rsaquo; Users</div></div></header>' +
       '<main class="page admin"><p class="muted small">Who may do what in this app. Changes apply right away. This does not change anyone\'s JobTread role. ' +
-      'People appear here when their JobTread role is Admin or Project Manager; a "No JT key" person can look but cannot save or upload until you add their key to the script.</p>' + body + '</main>';
+      'People appear here when their JobTread role is Admin, Project Manager or Operations Manager; a "No JT key" person can look but cannot save or upload until you add their key to the script.</p>' + body + '</main>';
   }
   function setFeatures(next, boxes) {
     boxes.forEach(function (b) { b.disabled = true; });
