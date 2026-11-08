@@ -173,7 +173,7 @@
       '<section class="col act"><div class="lab labrow">Action</div><div class="ltools stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
       '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + '</div>' + listTools('active') + '<div id="activeJobs"></div></section>' +
       '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + '</div>' + listTools('wo') + '<div id="woJobs"></div></section>' +
-      '<section class="col tmp" id="tempCol" hidden><div class="lab labrow">Temporary jobs <b class="cnt" id="tempCnt"></b> <span class="small muted">&middot; customer not known yet</span></div><div id="tempJobs"></div></section></div></main>';
+      '<section class="col tmp" id="tempCol" hidden><div class="lab labrow">Temporary jobs <b class="cnt" id="tempCnt"></b> <span class="small muted">&middot; new customers, not in JobTread yet</span></div><div id="tempJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs(); loadTemps();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
@@ -2019,7 +2019,6 @@ function renderEditor() {
   // moves their photos to the real job. Admins and people allowed to start jobs see them in a list on the home screen.
   var tempsAt = 0;
   function loadTemps(force) {
-    if (!(state.isAdmin || (state.perms && state.perms.newJob === true))) return;
     if (!force && state.temps && Date.now() - tempsAt < 120000) return renderTemps();
     API.call('tempJobs').then(function (r) { state.temps = r.jobs || []; tempsAt = Date.now(); renderTemps(); })
       .catch(function (e) { if (e && e.code === 'auth') handleError(e); });
@@ -2032,12 +2031,12 @@ function renderEditor() {
     box.innerHTML = '<div class="results">' + list.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       return '<div class="jobrow hasgo"><span class="star tempmark" aria-hidden="true">T</span><div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-        '<span class="name">' + esc(j.longName.replace(/^TEMP: /, '')) + noteMark(j) + '</span><span class="phase">' + esc((j.by || '') + ' \u00b7 ' + fmtShort(j.at) + ' \u00b7 ' + (j.photos || 0) + ' photo' + (j.photos === 1 ? '' : 's')) + '</span></button>' +
+        '<span class="name">' + esc((j.customer ? j.customer + ' \u00b7 ' : '') + j.longName.replace(/^TEMP: /, '')) + noteMark(j) + '</span><span class="phase">' + esc((j.by || '') + ' \u00b7 ' + fmtShort(j.at) + ' \u00b7 ' + (j.photos || 0) + ' photo' + (j.photos === 1 ? '' : 's')) + '</span></button>' +
         goBtn(j) + '</div>' + (state.isAdmin ? '<button class="btn small movebtn" data-act="moveTemp" data-id="' + esc(j.id) + '">Move to job&hellip;</button>' : '') + '</div>';
     }).join('') + '</div>';
   }
   function openNewJob() {
-    state.nj = { name: state.query.trim(), address: '', note: '', mode: 'temp', cust: null, custQ: '', custs: [] };
+    state.nj = { name: state.query.trim(), address: '', note: '', mode: '', cust: null, custQ: '', custs: [], newCust: '' };
     go('newjob');
   }
   function renderNewJob() {
@@ -2048,22 +2047,24 @@ function renderEditor() {
       '<label class="lab" for="njName">Job name</label><input id="njName" maxlength="100" value="' + esc(n.name) + '" placeholder="e.g. 2560 Oak St bathroom leak">' +
       '<label class="lab" for="njAddr">Address <span class="small muted">(if known)</span></label><input id="njAddr" maxlength="200" value="' + esc(n.address) + '" placeholder="Street, city">' +
       '<label class="lab" for="njNote">Note for the office <span class="small muted">(optional)</span></label><textarea id="njNote" rows="3" maxlength="1000" placeholder="Who called, what is needed...">' + esc(n.note) + '</textarea>' +
-      '<div class="lab">Customer</div><div class="njmode">' +
-      '<button class="' + (n.mode === 'temp' ? 'on' : '') + '" data-act="njMode" data-mode="temp">Not known yet</button>' +
-      '<button class="' + (n.mode === 'cust' ? 'on' : '') + '" data-act="njMode" data-mode="cust">Existing customer</button></div>' +
-      (n.mode === 'temp' ? '<p class="small muted">Saved as a <b>temporary job</b>. You can add photos right away. The office gets an email, makes the real job in JobTread later, and moves your photos there.</p>'
-        : (n.cust ? '<div class="njcust"><b>' + esc(n.cust.name) + '</b> <button class="link small" data-act="njCustClear">Change</button></div>'
-          : '<input id="njCustQ" type="search" placeholder="Type the customer name" value="' + esc(n.custQ) + '" autocomplete="off"><div id="njCusts" class="results"></div>') +
-          '<p class="small muted">A real JobTread job is made now under this customer, with Status \u201cA New Lead\u201d. The office gets an email to fill in the rest.</p>') +
-      '<button class="btn primary big" data-act="njCreate"' + (n.busy ? ' disabled' : '') + '>' + (n.busy ? 'Saving...' : (n.mode === 'temp' ? 'Start temporary job' : 'Create job in JobTread')) + '</button>' +
+      '<div class="lab">Customer</div>' +
+      (n.mode === 'cust' ? '<div class="njcust"><b>' + esc(n.cust.name) + '</b> <button class="link small" data-act="njCustClear">Change</button></div>' +
+          '<p class="small muted">A real JobTread job is made now under this customer, with Status \u201cA New Lead\u201d. The office gets an email to fill in the rest.</p>'
+        : n.mode === 'temp' ? '<div class="njcust"><span class="small muted">New:</span> <input id="njNewCust" maxlength="100" value="' + esc(n.newCust) + '" placeholder="New customer name"> <button class="link small" data-act="njCustClear">Change</button></div>' +
+          '<p class="small muted">Not in JobTread yet, so this is saved as a <b>temporary job</b> with this customer name. Add photos right away. Everyone sees it under \u201cTemporary jobs\u201d; the Admin makes the real job and moves the photos.</p>'
+        : '<input id="njCustQ" type="search" placeholder="Type the customer name" value="' + esc(n.custQ) + '" autocomplete="off"><div id="njCusts" class="results"></div>') +
+      '<button class="btn primary big" data-act="njCreate"' + (n.busy || !n.mode ? ' disabled' : '') + '>' + (n.busy ? 'Saving...' : (n.mode === 'temp' ? 'Start temporary job' : n.mode === 'cust' ? 'Create job in JobTread' : 'Pick or add the customer first')) + '</button>' +
       '<p class="small msg" id="njMsg"></p></div></main>';
     paintCusts();
   }
   function paintCusts() {
     var box = $('#njCusts'); if (!box) return;
     var n = state.nj;
-    box.innerHTML = n.custQ.trim().length < 2 ? '' : !n.custs.length ? '<p class="small muted">No customer found. Use \u201cNot known yet\u201d instead.</p>' :
-      n.custs.map(function (c, i) { return '<button class="job" data-act="njPickCust" data-i="' + i + '"><span class="name">' + esc(c.name) + '</span></button>'; }).join('');
+    var q = n.custQ.trim();
+    box.innerHTML = q.length < 2 ? '<p class="small muted">Type 2+ letters. If the customer is not in JobTread, you can add the name as a new customer.</p>' :
+      n.custs.map(function (c, i) { return '<button class="job" data-act="njPickCust" data-i="' + i + '"><span class="name">' + esc(c.name) + '</span></button>'; }).join('') +
+      (n.custs.length ? '' : '<p class="small muted">No customer found in JobTread.</p>') +
+      '<button class="job newjobrow" data-act="njNewCust"><span class="name">+ New customer: \u201c' + esc(q) + '\u201d</span></button>';
   }
   var custTimer;
   function onCustSearch(v) {
@@ -2073,14 +2074,16 @@ function renderEditor() {
       API.call('customers', { q: v }).then(function (r) { if (state.nj === n) { n.custs = r.customers || []; paintCusts(); } }).catch(handleError);
     }, 300);
   }
-  function njKeep() { var n = state.nj; ['Name', 'Addr', 'Note'].forEach(function (k) { var el = $('#nj' + k); if (el) n[{ Name: 'name', Addr: 'address', Note: 'note' }[k]] = el.value; }); }
+  function njKeep() { var n = state.nj; ['Name', 'Addr', 'Note', 'NewCust'].forEach(function (k) { var el = $('#nj' + k); if (el) n[{ Name: 'name', Addr: 'address', Note: 'note', NewCust: 'newCust' }[k]] = el.value; }); }
+  function njErr(t) { var el = $('#njMsg'); if (el) { el.textContent = t; el.className = 'small msg'; } }
   function createNewJob() {
     njKeep();
     var n = state.nj;
-    if (n.name.trim().length < 3) return setMsg('Type a job name.');
-    if (n.mode === 'cust' && !n.cust) return setMsg('Pick the customer, or choose \u201cNot known yet\u201d.');
+    if (n.name.trim().length < 3) return njErr('Type a job name.');
+    if (!n.mode) return njErr('Pick the customer, or add a new customer name.');
+    if (n.mode === 'temp' && n.newCust.trim().length < 2) return njErr('Type the new customer name.');
     n.busy = true; renderNewJob();
-    API.call('newJob', { name: n.name, address: n.address, note: n.note, customerId: n.mode === 'cust' ? n.cust.id : '' }).then(function (r) {
+    API.call('newJob', { name: n.name, address: n.address, note: n.note, customerId: n.mode === 'cust' ? n.cust.id : '', customerName: n.mode === 'temp' ? n.newCust : '' }).then(function (r) {
       n.busy = false;
       var j = r.job;
       if (r.temp) { state.temps = [j].concat(state.temps || []); tempsAt = 0; }
@@ -2095,23 +2098,53 @@ function renderEditor() {
   /* --- Admin: move a temporary job's photos to the real job */
   function openMoveTemp(id) {
     var tj = (state.temps || []).filter(function (x) { return x.id === id; })[0]; if (!tj) return;
-    state.mv = { temp: tj, q: '', jobs: [], target: null, busy: false };
+    state.mv = { temp: tj, mode: 'new', q: '', jobs: [], target: null, busy: false,
+      newCust: tj.customer || '', cust: null, custs: [], name: tj.longName.replace(/^TEMP: /, ''), address: tj.address || '' };
     go('movetemp');
+    if (state.mv.newCust.length >= 2) onMvCust(state.mv.newCust);
   }
+  function mvKeep() { var m = state.mv; [['mvNewCust', 'newCust'], ['mvName', 'name'], ['mvAddr', 'address']].forEach(function (p) { var el = $('#' + p[0]); if (el) m[p[1]] = el.value; }); }
   function renderMoveTemp() {
-    var m = state.mv, tj = m.temp;
+    var m = state.mv, tj = m.temp, isNew = m.mode === 'new';
+    var ready = isNew ? (m.name.trim().length >= 3 && (m.cust || m.newCust.trim().length >= 2)) : !!m.target;
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="mvBack">&larr; Back</button><div class="grow"><div class="title">Move temporary job</div></div></header>' +
       '<main class="page newjob"><div class="card">' +
-      '<p><b>' + esc(tj.longName.replace(/^TEMP: /, '')) + '</b><br><span class="small muted">' + esc((tj.by || '') + ' \u00b7 ' + fmtShort(tj.at) + ' \u00b7 ' + (tj.photos || 0) + ' photos' + (tj.address ? ' \u00b7 ' + tj.address : '')) + '</span></p>' +
+      '<p><b>' + esc((tj.customer ? tj.customer + ' · ' : '') + tj.longName.replace(/^TEMP: /, '')) + '</b><br><span class="small muted">' + esc((tj.by || '') + ' · ' + fmtShort(tj.at) + ' · ' + (tj.photos || 0) + ' photos' + (tj.address ? ' · ' + tj.address : '')) + '</span></p>' +
       (tj.note ? '<p class="small">Note: ' + esc(tj.note) + '</p>' : '') +
-      '<label class="lab" for="mvQ">Real job in JobTread</label>' +
-      (m.target ? '<div class="njcust"><b>' + esc(jn(m.target)) + '</b> <button class="link small" data-act="mvClear">Change</button></div>'
-        : '<input id="mvQ" type="search" autocomplete="off" placeholder="House number and street" value="' + esc(m.q) + '"><div id="mvJobs" class="results"></div>') +
-      '<p class="small muted">Make the real job in JobTread first. Every photo is copied into its <b>Photos</b> folder with its comment and tags. The originals are kept in \u201cTemporary Job Site\u201d (folder Temporary / Moved).</p>' +
-      '<button class="btn primary big" data-act="mvGo"' + (!m.target || m.busy ? ' disabled' : '') + '>' + (m.busy ? 'Moving...' : 'Move photos') + '</button>' +
+      '<div class="njmode"><button class="' + (isNew ? 'on' : '') + '" data-act="mvMode" data-mode="new">Make the new job</button>' +
+      '<button class="' + (isNew ? '' : 'on') + '" data-act="mvMode" data-mode="old">Job already in JobTread</button></div>' +
+      (isNew ?
+        '<div class="lab">Customer</div>' +
+        (m.cust ? '<div class="njcust"><span class="small muted">Existing:</span> <b>' + esc(m.cust.name) + '</b> <button class="link small" data-act="mvCustClear">Change</button></div>'
+          : '<input id="mvNewCust" maxlength="100" autocomplete="off" value="' + esc(m.newCust) + '" placeholder="Customer name"><div id="mvCusts" class="results"></div>') +
+        '<label class="lab" for="mvName">Job name</label><input id="mvName" maxlength="100" value="' + esc(m.name) + '">' +
+        '<label class="lab" for="mvAddr">Address</label><input id="mvAddr" maxlength="200" value="' + esc(m.address) + '" placeholder="Street, city">' +
+        '<p class="small muted">Makes the customer (if new) and the job in JobTread with Status “A New Lead”, then copies every photo into its <b>Photos</b> folder. Originals stay in “Temporary Job Site” (Temporary / Moved).</p>'
+      :
+        '<label class="lab" for="mvQ">Real job in JobTread</label>' +
+        (m.target ? '<div class="njcust"><b>' + esc(jn(m.target)) + '</b> <button class="link small" data-act="mvClear">Change</button></div>'
+          : '<input id="mvQ" type="search" autocomplete="off" placeholder="House number and street" value="' + esc(m.q) + '"><div id="mvJobs" class="results"></div>') +
+        '<p class="small muted">Every photo is copied into its <b>Photos</b> folder with its comment and tags. Originals stay in “Temporary Job Site” (Temporary / Moved).</p>') +
+      '<button class="btn primary big" data-act="mvGo"' + (!ready || m.busy ? ' disabled' : '') + '>' + (m.busy ? 'Moving...' : isNew ? 'Make job and move photos' : 'Move photos') + '</button>' +
       '<p class="small msg" id="mvMsg"></p></div></main>';
-    paintMvJobs();
+    paintMvJobs(); paintMvCusts();
+  }
+  function paintMvCusts() {
+    var box = $('#mvCusts'); if (!box) return;
+    var m = state.mv;
+    box.innerHTML = m.newCust.trim().length < 2 ? '' : m.custs.length
+      ? '<p class="small muted">Already in JobTread? Tap to use it:</p>' + m.custs.map(function (c, i) { return '<button class="job" data-act="mvPickCust" data-i="' + i + '"><span class="name">' + esc(c.name) + '</span></button>'; }).join('')
+      : '<p class="small muted">No customer with this name in JobTread. A new customer will be made.</p>';
+  }
+  var mvcTimer;
+  function onMvCust(v) {
+    var m = state.mv; m.newCust = v; clearTimeout(mvcTimer);
+    var b = $('[data-act="mvGo"]'); if (b && !m.busy) b.disabled = !(m.name.trim().length >= 3 && v.trim().length >= 2);
+    if (v.trim().length < 2) { m.custs = []; return paintMvCusts(); }
+    mvcTimer = setTimeout(function () {
+      API.call('adminCustomers', { q: v }).then(function (r) { if (state.mv === m) { m.custs = r.customers || []; paintMvCusts(); } }).catch(function () { /* list only */ });
+    }, 300);
   }
   function paintMvJobs() {
     var box = $('#mvJobs'); if (!box) return;
@@ -2128,18 +2161,23 @@ function renderEditor() {
     }, 300);
   }
   function runMove() {
-    var m = state.mv; if (!m.target) return;
-    if (!confirm('Copy all photos of\n' + m.temp.longName.replace(/^TEMP: /, '') + '\n\ninto\n' + jn(m.target) + '?')) return;
+    mvKeep();
+    var m = state.mv, isNew = m.mode === 'new';
+    if (!isNew && !m.target) return;
+    var create = isNew ? { customerId: m.cust ? m.cust.id : '', newCustomer: m.cust ? '' : m.newCust, name: m.name, address: m.address } : null;
+    var dest = isNew ? 'a NEW job “' + m.name + '” for ' + (m.cust ? 'customer ' + m.cust.name : 'NEW customer ' + m.newCust) : jn(m.target);
+    if (!confirm('Copy all photos of\n' + m.temp.longName.replace(/^TEMP: /, '') + '\n\ninto\n' + dest + '?')) return;
     m.busy = true; renderMoveTemp();
     var copied = 0;
     (function step() {
       overlay(true, 'Copying photos... ' + copied + (m.temp.photos ? ' of ' + m.temp.photos : ''), m.temp.photos ? copied / m.temp.photos * 100 : 50);
-      API.call('moveTemp', { tempId: m.temp.id.replace(/^T~/, ''), targetJobId: m.target.id }).then(function (r) {
+      API.call('moveTemp', { tempId: m.temp.id.replace(/^T~/, ''), targetJobId: isNew ? '' : m.target.id, create: create }).then(function (r) {
         copied += r.copied;
         if (!r.done && r.copied) return step();
         overlay(false); m.busy = false;
         state.temps = (state.temps || []).filter(function (x) { return x.id !== m.temp.id; });
-        if (state.pickedJob && state.pickedJob.id === m.temp.id) state.pickedJob = { id: m.target.id, name: m.target.name };
+        var real = { id: r.jobId || (m.target && m.target.id), name: r.jobName || '', longName: isNew ? m.name : (m.target && m.target.longName) || '' };
+        if (state.pickedJob && state.pickedJob.id === m.temp.id) state.pickedJob = real;
         go('search'); toast(copied + ' photo' + (copied === 1 ? '' : 's') + ' moved to ' + (r.jobName || 'the job') + '.');
       }).catch(function (e) { overlay(false); m.busy = false; renderMoveTemp(); handleError(e, $('#mvMsg')); });
     })();
@@ -2182,11 +2220,15 @@ function renderEditor() {
       case 'newJob': return openNewJob();
       case 'njBack': return go('search');
       case 'njMode': njKeep(); state.nj.mode = el.dataset.mode; return renderNewJob();
-      case 'njPickCust': njKeep(); state.nj.cust = state.nj.custs[Number(el.dataset.i)]; return renderNewJob();
-      case 'njCustClear': njKeep(); state.nj.cust = null; return renderNewJob();
+      case 'njPickCust': njKeep(); state.nj.cust = state.nj.custs[Number(el.dataset.i)]; state.nj.mode = 'cust'; return renderNewJob();
+      case 'njNewCust': njKeep(); state.nj.newCust = state.nj.custQ.trim(); state.nj.mode = 'temp'; return renderNewJob();
+      case 'njCustClear': njKeep(); state.nj.cust = null; state.nj.mode = ''; return renderNewJob();
       case 'njCreate': return createNewJob();
       case 'moveTemp': return openMoveTemp(el.dataset.id);
       case 'mvBack': return go('search');
+      case 'mvMode': mvKeep(); state.mv.mode = el.dataset.mode === 'new' ? 'new' : 'old'; return renderMoveTemp();
+      case 'mvPickCust': mvKeep(); state.mv.cust = state.mv.custs[Number(el.dataset.i)]; return renderMoveTemp();
+      case 'mvCustClear': mvKeep(); state.mv.cust = null; return renderMoveTemp();
       case 'mvPick': state.mv.target = state.mv.jobs[Number(el.dataset.i)]; return renderMoveTemp();
       case 'mvClear': state.mv.target = null; return renderMoveTemp();
       case 'mvGo': return runMove();
@@ -2320,6 +2362,8 @@ function renderEditor() {
     if (t.id === 'upq') return onUpSearch(t.value);
     if (t.id === 'njCustQ') return onCustSearch(t.value);
     if (t.id === 'mvQ') return onMvSearch(t.value);
+    if (t.id === 'mvNewCust') return onMvCust(t.value);
+    if (t.id === 'mvName' && state.mv) { state.mv.name = t.value; var gb = $('[data-act="mvGo"]'); if (gb && !state.mv.busy) gb.disabled = !(t.value.trim().length >= 3 && (state.mv.cust || state.mv.newCust.trim().length >= 2)); return; }
     if (t.id === 'noteText' && state.pickedJob) {
       var had = !!noteGet(state.pickedJob.id);
       if (!noteSet(state.pickedJob.id, t.value)) { toast('Could not save the note: this device is out of space.'); return; }
