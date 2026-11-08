@@ -639,6 +639,7 @@ details.user .ucount { margin-left: auto; }
 .njinfo { margin: 8px 0 4px; padding: 10px 12px; border-radius: 12px; background: #eef4ff; border: 1px solid #bcd4f4; color: #1d3b6b; font-size: 14px; line-height: 1.4; }
 .njinfo.warn { background: #fffaeb; border-color: #fedf89; color: #7a2e0e; }
 .njinfo[hidden] { display: none; }
+.njnote { margin: 6px 0 2px; padding: 8px 12px; border-left: 3px solid var(--blue); background: #f8fafc; border-radius: 8px; font-size: 14px; color: var(--ink); line-height: 1.4; }
 .njmode button { flex: 1; min-height: 44px; }
 .njcust { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; }
 .btn.big { min-height: 52px; font-size: 17px; margin-top: 8px; }

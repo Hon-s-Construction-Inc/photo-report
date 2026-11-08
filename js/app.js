@@ -2156,6 +2156,7 @@ function renderEditor() {
       '<label class="lab" for="njCustQ">Customer</label>' +
       (n.cust ? '<div class="njcust"><b>' + esc(n.cust.name) + '</b> <button class="link small" data-act="njCustClear">Change</button></div>'
         : '<input id="njCustQ" type="search" placeholder="Type the customer name" value="' + esc(n.custQ) + '" autocomplete="off"><div id="njCusts" class="results"></div>') +
+      '<p class="njnote">Not a management job, choose <b>DH private</b> or <b>SP private</b> depending on who assigned you.</p>' +
       '<div id="njInfo" class="njinfo"></div>' +
       '<label class="lab" for="njName">Job name</label><input id="njName" maxlength="100" value="' + esc(n.name) + '" placeholder="e.g. 2560 Oak St bathroom leak">' +
       '<label class="lab" for="njAddr">Address <span class="small muted">(if known)</span></label><input id="njAddr" maxlength="200" value="' + esc(n.address) + '" placeholder="Street, city">' +
