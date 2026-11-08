@@ -521,6 +521,9 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 .home :is(#activeJobs, #woJobs) .job { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 0; padding: 6px 12px; }
 .home :is(#activeJobs, #woJobs) .job .name { font-size: 16px; line-height: 1.25; }
 .home :is(#activeJobs, #woJobs) .phase { font-size: 11px; padding: 0; background: none; color: var(--muted); font-weight: 600; }
+.home #myJobs .job:has(.phase) { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; text-align: left; }
+.home #myJobs .phase { font-size: 11px; color: var(--muted); font-weight: 600; }
+.home #myJobs .job.picked .phase { color: rgba(255,255,255,.85); }
 .home :is(#activeJobs, #woJobs) .job.picked .phase { background: none; color: #dbe9fb; }
 .home :is(#activeJobs, #woJobs) .jobrow .star { min-height: 0; align-self: stretch; }
 

@@ -431,10 +431,12 @@
     statusFilter('my', state.myJobs);
     var shown = sortMyJobs(listFilter('my', state.myJobs));
     if (!shown.length) { box.innerHTML = noMatch('my'); return; }
+    var edit = canStatus();
     box.innerHTML = '<div class="results">' + shown.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       var x = '<button class="star unstar" data-act="unstar" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-label="Remove from My jobsite" title="Remove from My jobsite">&times;</button>';
-      return '<div class="jobrow hasgo">' + x + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + noteMark(j) + '</span></button>' + goBtn(j) + '</div></div>';
+      var ph = phaseOf(j), st = stBubble(j, edit);
+      return '<div class="jobrow hasgo' + (st ? ' hasst' : '') + '">' + x + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + noteMark(j) + '</span>' + (ph ? '<span class="phase">' + esc(ph) + '</span>' : '') + '</button>' + st + goBtn(j) + '</div></div>';
     }).join('') + '</div>';
   }
 
@@ -481,16 +483,20 @@
     var edit = canStatus();
     return '<div class="results">' + ((opts && opts.byStatus) ? byStatus(list) : sortMyJobs(list)).map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
-      // Only the Statuses an Admin allowed this person; a job outside them shows its Status without a picker.
-      var allow = state.statusAllowed, mine = edit && (!allow || allow.indexOf(j.phase) > -1);
-      var opts = mine ? state.statusOptions.filter(function (o) { return !allow || allow.indexOf(o) > -1; }) : [];
-      // A small ▾ bubble on the job card opens the Status list (a real, invisible <select> sits on top of it).
-      var st = mine ? '<span class="stbub" title="Change Status">▾<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Change Status of ' + esc(jn(j)) + '">' +
-          opts.map(function (o) { return '<option' + (o === j.phase ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
-          (opts.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select></span>' : '';
+      var st = stBubble(j, edit), mine = !!st;
       return '<div class="jobrow hasgo' + (mine ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
         '<span class="name">' + esc(jn(j)) + noteMark(j) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button>' + st + goBtn(j) + '</div></div>';
     }).join('') + '</div>';
+  }
+  // Only the Statuses an Admin allowed this person; a job outside them (or with no known Status) gets no picker.
+  // A small ▾ bubble on the job card opens the Status list (a real, invisible <select> sits on top of it).
+  function stBubble(j, edit) {
+    var ph = phaseOf(j), allow = state.statusAllowed;
+    if (!edit || !ph || (allow && allow.indexOf(ph) < 0)) return '';
+    var opts = state.statusOptions.filter(function (o) { return !allow || allow.indexOf(o) > -1; });
+    return '<span class="stbub" title="Change Status">\u25be<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Change Status of ' + esc(jn(j)) + '">' +
+      opts.map(function (o) { return '<option' + (o === ph ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+      (opts.indexOf(ph) < 0 ? '<option selected>' + esc(ph) + '</option>' : '') + '</select></span>';
   }
   // → on a job: pick it and open the Action menu straight away.
   function goBtn(j) { return '<button class="gobtn" data-act="goAct" data-id="' + esc(j.id) + '" title="Actions for this job" aria-label="Actions for ' + esc(jn(j)) + '">&#8594;</button>'; }
@@ -510,7 +516,7 @@
     API.call('setJobStatus', { jobId: id, status: to }).then(function (r) {
       (state.wo || []).concat(state.active || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
       toast('Status changed to ' + r.status + '.');
-      renderWoJobs(); renderActiveJobs(); loadActiveJobs(true);
+      renderWoJobs(); renderActiveJobs(); renderMyJobs(); loadActiveJobs(true);
     }).catch(function (e) { sel.disabled = false; sel.value = j.phase; handleError(e); });
   }
 
