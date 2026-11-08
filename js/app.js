@@ -2142,7 +2142,7 @@ function renderEditor() {
     }).join('') + '</div>';
   }
   function openNewJob() {
-    state.nj = { name: state.query.trim(), address: '', cust: null, custQ: '', custs: [] };
+    state.nj = { name: state.query.trim(), address: '', sf: true, city: '', cust: null, custQ: '', custs: [] };
     go('newjob');
   }
   // Customer first: typing shows matching JobTread customers to pick. A name nobody picks is a NEW customer,
@@ -2159,7 +2159,9 @@ function renderEditor() {
       '<p class="njnote">Not a management job, choose <b>DH private</b> or <b>SP private</b> depending on who assigned you.</p>' +
       '<div id="njInfo" class="njinfo"></div>' +
       '<label class="lab" for="njName">Job name</label><input id="njName" maxlength="100" value="' + esc(n.name) + '" placeholder="e.g. 2560 Oak St bathroom leak">' +
-      '<label class="lab" for="njAddr">Address <span class="small muted">(if known)</span></label><input id="njAddr" maxlength="200" value="' + esc(n.address) + '" placeholder="Street, city">' +
+      '<label class="lab" for="njAddr">Street address <span class="small muted">(if known)</span></label><input id="njAddr" maxlength="200" value="' + esc(n.address) + '" placeholder="e.g. 2560 Oak St">' +
+      '<div class="lab">City</div><div class="njmode"><button class="' + (n.sf ? 'on' : '') + '" data-act="njSf" data-v="1">San Francisco</button><button class="' + (n.sf ? '' : 'on') + '" data-act="njSf" data-v="0">Other city</button></div>' +
+      (n.sf ? '' : '<input id="njCity" maxlength="60" value="' + esc(n.city) + '" placeholder="Type the city, e.g. Oakland" autocomplete="address-level2">') +
       '<button class="btn primary big" data-act="njCreate"></button>' +
       '<p class="small msg" id="njMsg"></p></div></main>';
     paintCusts(); paintNjState();
@@ -2192,7 +2194,7 @@ function renderEditor() {
       API.call('customers', { q: v }).then(function (r) { if (state.nj === n) { n.custs = r.customers || []; paintCusts(); } }).catch(handleError);
     }, 300);
   }
-  function njKeep() { var n = state.nj; ['Name', 'Addr'].forEach(function (k) { var el = $('#nj' + k); if (el) n[{ Name: 'name', Addr: 'address' }[k]] = el.value; }); }
+  function njKeep() { var n = state.nj; ['Name', 'Addr', 'City'].forEach(function (k) { var el = $('#nj' + k); if (el) n[{ Name: 'name', Addr: 'address', City: 'city' }[k]] = el.value; }); }
   function njErr(t) { var el = $('#njMsg'); if (el) { el.textContent = t; el.className = 'small msg'; } }
   function createNewJob() {
     njKeep();
@@ -2200,8 +2202,10 @@ function renderEditor() {
     if (n.name.trim().length < 3) return njErr('Type a job name.');
     var mode = njMode();
     if (!mode) return njErr('Type the customer name.');
+    if (!n.sf && n.city.trim().length < 2) { njErr('Type the city (the job is not in San Francisco).'); var ce = $('#njCity'); if (ce) ce.focus(); return; }
+    var city = n.sf ? 'San Francisco' : n.city.trim(), street = n.address.trim();
     n.busy = true; paintNjState();
-    API.call('newJob', { name: n.name, address: n.address, note: '', customerId: mode === 'cust' ? n.cust.id : '', customerName: mode === 'temp' ? n.custQ.trim() : '' }).then(function (r) {
+    API.call('newJob', { name: n.name, address: street ? street + ', ' + city : city, note: '', customerId: mode === 'cust' ? n.cust.id : '', customerName: mode === 'temp' ? n.custQ.trim() : '' }).then(function (r) {
       n.busy = false;
       var j = r.job;
       if (r.temp) { state.temps = [j].concat(state.temps || []); tempsAt = 0; }
@@ -2340,6 +2344,7 @@ function renderEditor() {
       case 'njBack': return go('search');
       case 'njPickCust': njKeep(); state.nj.cust = state.nj.custs[Number(el.dataset.i)]; return renderNewJob();
       case 'njCustClear': njKeep(); state.nj.cust = null; return renderNewJob();
+      case 'njSf': njKeep(); state.nj.sf = el.dataset.v === '1'; renderNewJob(); if (!state.nj.sf) { var c = $('#njCity'); if (c) c.focus(); } return;
       case 'njCreate': return createNewJob();
       case 'moveTemp': return openMoveTemp(el.dataset.id);
       case 'mvBack': return go('search');
