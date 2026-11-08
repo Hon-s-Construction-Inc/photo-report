@@ -248,6 +248,27 @@
       (state.isAdmin ? '<button data-act="admin">&#128100; Users and access</button>' : '') +
       '<button data-act="signOut">Sign out</button></div></div>';
   }
+  // → on a list row: the same actions as "Choose an action", opened right under that job (no jump to the top).
+  function openRowMenu(listId, id) {
+    var box = listId && document.getElementById(listId), src = $('#actMenu');
+    var btn = box && $$('.gobtn', box).filter(function (b) { return b.dataset.id === id; })[0];
+    var row = btn && btn.closest('.jobrow');
+    if (!row || !src || !state.pickedJob) return;
+    var m = $('#rowMenu');
+    if (!m) { m = document.createElement('div'); m.id = 'rowMenu'; m.className = 'actmenu rowmenu'; m.setAttribute('role', 'menu'); document.body.appendChild(m); }
+    m.innerHTML = '<div class="grp">' + esc(jn(state.pickedJob)) + '</div>' + src.innerHTML;
+    m.hidden = false;
+    var r = (row.querySelector('.jobcell') || row).getBoundingClientRect(), h = m.offsetHeight, vh = window.innerHeight;
+    var below = true;   // always right under the job; the page nudges up a little if the menu runs off the bottom
+    m.style.left = (r.left + window.scrollX) + 'px';
+    m.style.width = Math.max(r.width, 240) + 'px';
+    m.style.top = ((below ? r.bottom + 6 : r.top - h - 6) + window.scrollY) + 'px';
+    var mr = m.getBoundingClientRect();   // keep it on screen on narrow phones
+    if (mr.right > document.documentElement.clientWidth - 8) m.style.left = Math.max(8, document.documentElement.clientWidth - 8 - mr.width + window.scrollX) + 'px';
+    if (below && mr.bottom > vh) window.scrollBy({ top: mr.bottom - vh + 12, behavior: 'smooth' });
+  }
+  // A list that scrolls inside itself would leave the menu floating in the wrong place, so it closes.
+  document.addEventListener('scroll', function (e) { if (e.target !== document) { var m = $('#rowMenu'); if (m && !m.hidden && !m.contains(e.target)) m.hidden = true; } }, true);
   function closeMenus() {
     $$('.stf details[open]').forEach(function (d) { d.open = false; });
     $$('.ddm, .actmenu, .swapmenu').forEach(function (m) { m.hidden = true; });
@@ -2239,10 +2260,9 @@ function renderEditor() {
       case 'mvClear': state.mv.target = null; return renderMoveTemp();
       case 'mvGo': return runMove();
       case 'goAct': {
-        pickJob(el.dataset.id);
-        var ab = $('#actionBox'); if (ab) ab.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        setTimeout(function () { var m = $('#actMenu'); if (m && m.hidden) toggleActMenu(); }, 60);
-        return;
+        var listId = (el.closest('[id]') || {}).id, gid = el.dataset.id;
+        pickJob(gid);
+        return openRowMenu(listId, gid);
       }
       case 'pick': {
         var pj = allKnownJobs().filter(function (j) { return j.id === el.dataset.id; })[0] || null;
