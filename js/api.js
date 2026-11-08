@@ -47,7 +47,7 @@
     hasSession: function () { return !!localStorage.getItem(TOKEN_KEY); },
     savedUser: function () { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch (e) { return null; } },
     // Last answer from the server about what this person may do, so the home screen can open at once.
-    saveAccess: function (r) { try { localStorage.setItem('hci_pr_access', JSON.stringify({ perms: r.perms, isAdmin: r.isAdmin, write: r.write, statusAllowed: r.statusAllowed === undefined ? null : r.statusAllowed })); } catch (e) { /* full */ } },
+    saveAccess: function (r) { try { localStorage.setItem('hci_pr_access', JSON.stringify({ perms: r.perms, isAdmin: r.isAdmin, write: r.write, statusAllowed: r.statusAllowed === undefined ? null : r.statusAllowed, role: r.role || '' })); } catch (e) { /* full */ } },
     savedAccess: function () { try { return JSON.parse(localStorage.getItem('hci_pr_access')); } catch (e) { return null; } }
   };
 })();

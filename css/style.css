@@ -235,6 +235,18 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--blue); outl
 .sheet-box > header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 #sheetBody { padding: 14px 16px 20px; overflow: auto; }
 .sheet-sub { margin: 12px 0 6px; }
+.sheet.ask { z-index: 90; }
+#askBody { padding: 14px 16px 20px; overflow: auto; }
+#askBody > .btn.big { width: 100%; }
+.askopts { display: grid; gap: 8px; margin: 8px 0 14px; }
+.askopt { display: flex; align-items: center; gap: 12px; text-align: left; min-height: 56px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font-size: 17px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.askopt small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+.askopt .dot { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #98a2b3; }
+.askopt.on { border-color: var(--blue); background: #eef4ff; }
+.askopt.on .dot { border-color: var(--blue); background: radial-gradient(circle, var(--blue) 45%, transparent 50%); }
+.askopt:disabled { opacity: .45; cursor: not-allowed; }
+.askrow { display: flex; gap: 10px; }
+.askrow .btn { flex: 1; }
 .chip.tag { min-height: 40px; font-size: 15px; padding: 6px 14px; }
 .folders { display: grid; gap: 6px; }
 .folderopt { text-align: left; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-weight: 600; cursor: pointer; }

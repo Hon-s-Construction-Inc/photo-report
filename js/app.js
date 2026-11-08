@@ -66,7 +66,9 @@
   };
   // What this person may do here (set by an Admin). Until the server answers, everything shows.
   function can(k) { return !state.perms || state.perms[k] !== false; }
-  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; state.statusAllowed = r.statusAllowed || null; API.saveAccess(r); } if (r && r.write) state.write = r.write; }
+  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; state.statusAllowed = r.statusAllowed || null; state.role = r.role || ''; API.saveAccess(r); } if (r && r.write) state.write = r.write; }
+  function isPmRole() { return state.role === 'Project Manager' || state.role === 'Operations Manager'; }
+  function canAssign() { return state.isAdmin || state.role === 'Operations Manager'; }
   // Can this person save to JobTread right now? Unknown until the server says; then every write control follows it.
   function canWrite() { return !state.write || state.write.ok !== false; }
   function writeWhy() { return (state.write && state.write.message) || 'Saving to JobTread is not available for you yet.'; }
@@ -213,7 +215,8 @@
     // Photos (Upload photos, Make a report).
     var tmp = j && j.temp;   // a temporary job only has photos until an Admin moves it to a real job
     var items = (tmp ? '' : o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload'))) +
-      o('goGallery', 'Photos', can('photos') || can('report') || can('upload'));
+      o('goGallery', 'Photos', can('photos') || can('report') || can('upload')) +
+      (tmp ? '' : o('goAssign', 'Assign project manager', canAssign()));
     var box = $('#actionBox'); if (!box) return;
     if (!items) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
     box.innerHTML = '<div class="actwrap"><button id="actionSel" class="actionsel" data-act="actMenu" aria-haspopup="menu" aria-expanded="false"' + (j ? '' : ' disabled') + '>' +
@@ -236,6 +239,7 @@
       case 'goGallery': return openGallery(j);
       case 'goUpload': return openUpload(j, 'search');
       case 'goReport': return pullJob(j);
+      case 'goAssign': return openAssign(j);
     }
   }
 
@@ -2040,6 +2044,81 @@ function renderEditor() {
       .catch(function (e) { box.checked = !done; box.disabled = false; handleError(e); });
   }
 
+  /* ------------------------------------------------------------------ ask sheets: remove / manage / assign */
+  // One bottom sheet for three small questions. state.ask = { kind, job, pick, busy, ... }.
+  function jobById(id) { return allKnownJobs().filter(function (j) { return j.id === id; })[0] || { id: id, name: '' }; }
+  function openAsk(a) {
+    state.ask = a;
+    var sh = $('#askSheet');
+    if (!sh) { sh = document.createElement('div'); sh.id = 'askSheet'; sh.className = 'sheet ask'; sh.innerHTML = '<div class="sheet-box"><header><b id="askTitle"></b><button class="btn small" data-act="askClose">Cancel</button></header><div id="askBody"></div></div>'; document.body.appendChild(sh); }
+    sh.hidden = false; paintAsk();
+  }
+  function closeAsk() { var sh = $('#askSheet'); if (sh) sh.hidden = true; state.ask = null; }
+  var REMOVE_CHOICES = [
+    { v: 'Complete Pending Final Payment', t: 'Complete Pending Final Payment', jt: true },
+    { v: 'On Hold', t: 'Hold', jt: true },
+    { v: 'Canceled', t: 'Cancel', jt: true },
+    { v: '', t: 'Not my managed job', jt: false }];
+  function paintAsk() {
+    var a = state.ask, body = $('#askBody'), title = $('#askTitle'); if (!a || !body) return;
+    var name = esc(jn(a.job) || a.job.name || 'this job'), w = canWrite(), h = '';
+    if (a.kind === 'remove') {
+      title.textContent = 'Remove from My jobsite';
+      h = '<p><b>' + name + '</b></p><p class="small muted">Pick why it comes off your list:</p><div class="askopts">' +
+        REMOVE_CHOICES.map(function (c) {
+          var off = c.jt && !w, on = a.pick === c.v && a.pick !== null;
+          return '<button class="askopt' + (on ? ' on' : '') + '" data-act="rmPick" data-v="' + esc(c.v) + '"' + (off ? ' disabled' : '') + '><span class="dot"></span><span>' + esc(c.t) +
+            '<small>' + (c.jt ? 'Changes the JobTread Status to “' + esc(c.v) + '”' : 'Nothing changes in JobTread') + '</small></span></button>';
+        }).join('') + '</div>' + (!w ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') +
+        '<button class="btn primary big" data-act="rmGo"' + (a.pick === null || a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Saving...' : 'Remove from My jobsite') + '</button>';
+    } else if (a.kind === 'manage') {
+      title.textContent = 'Added to My jobsite';
+      h = '<p><b>' + name + '</b></p><p>Do you manage this job?</p><p class="small muted">Yes sets you as its Project Manager in JobTread. Either way the job stays in My jobsite.</p>' +
+        '<div class="askrow"><button class="btn big" data-act="askClose">No</button><button class="btn primary big" data-act="mgYes"' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Saving...' : 'Yes, I manage it') + '</button></div>';
+    } else if (a.kind === 'assign') {
+      title.textContent = 'Assign project manager';
+      h = '<p><b>' + name + '</b></p>' + (!a.options ? '<p class="small muted">Loading...</p>' :
+        '<div class="askopts">' + a.options.map(function (o) {
+          return '<button class="askopt' + (a.pick === o.name ? ' on' : '') + '" data-act="pmPick" data-v="' + esc(o.name) + '"><span class="dot"></span><span>' + esc(o.name) +
+            '<small>' + (o.name === a.current ? 'Current Project Manager \u00b7 ' : '') + (o.inApp ? 'Also added to their My jobsite' : 'Not an app user') + '</small></span></button>';
+        }).join('') + '</div>' + (!w ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') +
+        '<button class="btn primary big" data-act="pmGo"' + (!a.pick || a.busy || !w ? ' disabled' : '') + '>' + (a.busy ? 'Saving...' : 'Assign') + '</button>');
+    }
+    body.innerHTML = h + '<p class="small msg" id="askMsg"></p>';
+  }
+  function openRemove(id) { openAsk({ kind: 'remove', job: jobById(id), pick: null }); }
+  function runRemove() {
+    var a = state.ask; if (!a || a.pick === null) return;
+    var id = a.job.id, done = function (msg) { closeAsk(); if (isMyJob(id)) toggleMyJob(id); if (msg) toast(msg); };
+    if (!a.pick) return done();
+    a.busy = true; paintAsk();
+    API.call('releaseJob', { jobId: id, status: a.pick }).then(function (r) {
+      (state.wo || []).concat(state.active || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
+      done('Removed. JobTread Status is now \u201c' + r.status + '\u201d.');
+      loadActiveJobs(true); loadWoJobs(true);
+    }).catch(function (e) { a.busy = false; paintAsk(); handleError(e, $('#askMsg')); });
+  }
+  function askManage(id) { if (isPmRole() && canWrite()) openAsk({ kind: 'manage', job: jobById(id) }); }
+  function runClaim() {
+    var a = state.ask; if (!a) return;
+    a.busy = true; paintAsk();
+    API.call('claimJob', { jobId: a.job.id }).then(function (r) { closeAsk(); toast('You are now the Project Manager (' + r.pm + ') in JobTread.'); })
+      .catch(function (e) { a.busy = false; paintAsk(); handleError(e, $('#askMsg')); });
+  }
+  function openAssign(j) {
+    openAsk({ kind: 'assign', job: j, pick: '', options: null });
+    var a = state.ask;
+    API.call('pmOptions', { jobId: j.id }).then(function (r) { if (state.ask === a) { a.options = r.options || []; a.current = r.current || ''; a.pick = a.pick || a.current; paintAsk(); } })
+      .catch(function (e) { handleError(e, $('#askMsg')); });
+  }
+  function runAssign() {
+    var a = state.ask; if (!a || !a.pick) return;
+    a.busy = true; paintAsk();
+    API.call('assignPm', { jobId: a.job.id, pm: a.pick }).then(function (r) {
+      closeAsk(); toast('Assigned to ' + r.pm + (r.addedToMyJobs ? ' and added to their My jobsite.' : '.'));
+    }).catch(function (e) { a.busy = false; paintAsk(); handleError(e, $('#askMsg')); });
+  }
+
   /* ------------------------------------------------------------------ Help */
   /* ------------------------------------------------------------------ new job from the field */
   // Temporary jobs (customer not known yet) live as folders in the JobTread job "Temporary Job Site" until an Admin
@@ -2246,6 +2325,7 @@ function renderEditor() {
     // Menus stay open while a tap lands inside them: iPadOS drops the photo picker if its button is hidden mid-tap.
     if (!ev.target.closest('.dd, .swapmenu, .actmenu, .stf')) closeMenus();
     if (ev.target.id === 'sheet') return closeSheet();
+    if (ev.target.id === 'askSheet') return closeAsk();
     var inSec = ev.target.closest('#sections .sec');
     if (inSec) setActive(Number(inSec.dataset.sec));
     var el = ev.target.closest('[data-act]'); if (!el) return;
@@ -2295,8 +2375,14 @@ function renderEditor() {
       case 'todoAdd': return addTodo();
       case 'todoShowAdd': if (state.todos && state.todos.added) { state.todos.added = null; state.todos.add = true; renderTodos(); return; } $('#todoForm').hidden = false; $('#todoShowAdd').hidden = true; $('#todoName').focus(); return;
       case 'pull': return pullPhotos();
-      case 'star': ev.stopPropagation(); if (!isMyJob(el.dataset.id)) toggleMyJob(el.dataset.id, el.dataset.name); return;
-      case 'unstar': ev.stopPropagation(); if (isMyJob(el.dataset.id) && confirm('Remove "' + (el.dataset.name || 'this job') + '" from My jobsite?')) toggleMyJob(el.dataset.id, el.dataset.name); return;
+      case 'star': ev.stopPropagation(); if (!isMyJob(el.dataset.id)) { toggleMyJob(el.dataset.id, el.dataset.name); if (isMyJob(el.dataset.id)) askManage(el.dataset.id); } return;
+      case 'unstar': ev.stopPropagation(); if (isMyJob(el.dataset.id)) openRemove(el.dataset.id); return;
+      case 'askClose': return closeAsk();
+      case 'rmPick': state.ask.pick = el.dataset.v; return paintAsk();
+      case 'rmGo': return runRemove();
+      case 'mgYes': return runClaim();
+      case 'pmPick': state.ask.pick = el.dataset.v; return paintAsk();
+      case 'pmGo': return runAssign();
       case 'myPhotos': return pullJob(myJob(el.dataset.id));
       case 'myUpload': return openUpload(myJob(el.dataset.id), 'search');
       case 'myFiles': return openFiles(myJob(el.dataset.id), 'search');
@@ -2491,7 +2577,7 @@ function renderEditor() {
     // Open straight away with what this device knew last time; the server check runs in the background
     // and the screen is redrawn only if something changed (new switches, signed out, etc.).
     var saved = API.savedUser(), acc = API.savedAccess(), quick = !!(saved && acc && acc.perms);
-    if (quick) { state.user = saved; state.perms = acc.perms; state.isAdmin = !!acc.isAdmin; state.write = acc.write || null; state.statusAllowed = acc.statusAllowed || null; afterSignIn(); }
+    if (quick) { state.user = saved; state.perms = acc.perms; state.isAdmin = !!acc.isAdmin; state.write = acc.write || null; state.statusAllowed = acc.statusAllowed || null; state.role = acc.role || ''; afterSignIn(); }
     API.call('me').then(function (r) {
       var before = JSON.stringify([state.perms, state.isAdmin, state.write, state.statusAllowed]);
       state.user = r.user; takePerms(r);
