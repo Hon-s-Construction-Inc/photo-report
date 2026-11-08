@@ -1726,28 +1726,32 @@ function renderEditor() {
     else {
       var defs = (a.perms || []).map(function (p) { return typeof p === 'string' ? { key: p, label: p } : p; });
       var feats = a.features || {};
-      body = '<section class="user feats"><div class="uhead"><b>Buttons for everyone</b><span class="small muted">Company-wide. A button switched off here is hidden for every Project Manager and Operations Manager, whatever their personal switch says. Admins always see everything.</span></div>' +
+      var op = state.adminOpen || (state.adminOpen = { feats: true, phases: true });
+      var isOpen = function (k) { return op[k] ? ' open' : ''; };
+      body = '<details class="user feats" data-key="feats"' + isOpen('feats') + '><summary class="uhead"><b>Buttons for everyone</b><span class="small muted">Company-wide. A button switched off here is hidden for every Project Manager and Operations Manager, whatever their personal switch says. Admins always see everything.</span></summary>' +
         permGroups(defs, function (d) {
           return '<label class="perm"><input type="checkbox" class="featchk" data-perm="' + esc(d.key) + '"' + (feats[d.key] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + '</span></label>';
         }) +
-        '<div class="row2 presets"><span class="small muted">Quick set:</span><button class="btn small" data-act="featPreset" data-preset="report">Photo report only</button><button class="btn small" data-act="featPreset" data-preset="all">Everything on</button></div></section>' +
-        ((a.phaseOptions || []).length ? '<section class="user feats phases"><div class="uhead"><b>Active jobs list for everyone</b><span class="small muted">Open jobs whose JobTread Status is ticked here show under Active jobs on everyone\'s home screen.</span></div>' +
+        '<div class="row2 presets"><span class="small muted">Quick set:</span><button class="btn small" data-act="featPreset" data-preset="report">Photo report only</button><button class="btn small" data-act="featPreset" data-preset="all">Everything on</button></div></details>' +
+        ((a.phaseOptions || []).length ? '<details class="user feats phases" data-key="phases"' + isOpen('phases') + '><summary class="uhead"><b>Active jobs list for everyone</b><span class="small muted">Open jobs whose JobTread Status is ticked here show under Active jobs on everyone\'s home screen.</span></summary>' +
           '<div class="perms">' + (a.phaseOptions || []).map(function (ph) {
             var isNew = (a.phasesNew || []).indexOf(ph) > -1;
             return '<label class="perm"><input type="checkbox" class="phasechk" value="' + esc(ph) + '"' + ((a.phases || []).indexOf(ph) > -1 ? ' checked' : '') + '><span>' + esc(ph) + (isNew ? ' <b class="newtag">NEW in JobTread</b>' : '') + '</span></label>';
           }).join('') + '</div>' +
           ((a.phasesGone || []).length ? '<p class="small warn-txt">No longer in JobTread (renamed or removed there), so not used: ' + a.phasesGone.map(esc).join(', ') + '. Tick the new name above if it was renamed.</p>' : '') +
-          '<p class="small muted">Status choices are read from JobTread each time this screen opens.</p></section>' : '') +
-        '<div class="lab">Per person</div><div class="users">' + a.users.map(function (u) {
-        return '<div class="user' + (u.isAdmin ? ' adm' : '') + '"><div class="uhead"><b>' + esc(titleCase(u.name)) + '</b><span class="small muted">' + esc(u.email) + '</span>' +
+          '<p class="small muted">Status choices are read from JobTread each time this screen opens.</p></details>' : '') +
+        '<div class="lab labrow">Per person <span class="expall"><button class="link small" data-act="adminExpand" data-open="1">Expand all</button> &middot; <button class="link small" data-act="adminExpand" data-open="0">Collapse all</button></span></div><div class="users">' + a.users.map(function (u) {
+        var nOn = defs.filter(function (d) { return u.perms[d.key]; }).length;
+        return '<details class="user' + (u.isAdmin ? ' adm' : '') + '" data-key="' + esc(u.email) + '"' + isOpen(u.email) + '><summary class="uhead"><b>' + esc(titleCase(u.name)) + '</b><span class="small muted">' + esc(u.email) + '</span>' +
           '<span class="badge' + (u.isAdmin ? ' has' : '') + '">' + esc(u.role) + '</span>' +
-          '<span class="badge' + (u.hasKey ? ' has' : ' warn') + '" title="Needed to save or upload to JobTread">' + (u.hasKey ? 'JT key saved' : 'No JT key') + '</span></div>' +
+          '<span class="badge' + (u.hasKey ? ' has' : ' warn') + '" title="Needed to save or upload to JobTread">' + (u.hasKey ? 'JT key saved' : 'No JT key') + '</span>' +
+          '<span class="small muted ucount">' + (u.isAdmin ? 'everything' : nOn + ' of ' + defs.length + ' on') + '</span></summary>' +
           (u.isAdmin ? '<div class="small muted">Admins always have full access here.</div>' :
             permGroups(defs, function (d) {
               var k = d.key;
               var off = a.features && a.features[k] === false;
               return '<label class="perm' + (off ? ' gated' : '') + '" title="' + (off ? 'Switched off for everyone above' : '') + '"><input type="checkbox" class="permchk" data-email="' + esc(u.email) + '" data-perm="' + esc(k) + '"' + (u.perms[k] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + (off ? ' <i>(off for everyone)</i>' : '') + '</span></label>';
-            })) + '</div>';
+            })) + '</details>';
       }).join('') + '</div>';
     }
     app.innerHTML =
@@ -1938,6 +1942,11 @@ function renderEditor() {
       case 'taskNote': el.closest('.task').classList.toggle('open'); return;
       case 'taskJob': return can('report') ? pullJob({ id: el.dataset.id, name: el.dataset.name }) : openFiles({ id: el.dataset.id, name: el.dataset.name }, 'search');
       case 'admin': return openAdmin();
+      case 'adminExpand': {
+        var openAll = el.dataset.open === '1';
+        $$('.users details.user').forEach(function (d) { d.open = openAll; state.adminOpen[d.dataset.key] = openAll; });
+        return;
+      }
       case 'adminBack': return go('search');
       case 'featPreset': {
         var onlyReport = el.dataset.preset === 'report', pf = {};
@@ -2017,6 +2026,11 @@ function renderEditor() {
     if (inSec && Number(inSec.dataset.sec) !== activeIdx()) setActive(Number(inSec.dataset.sec));
   });
 
+  // Remember which Admin sections are open, so a refresh of the screen keeps them as they were.
+  document.addEventListener('toggle', function (ev) {
+    var d = ev.target; if (!d || !d.matches || !d.matches('details.user') || !state.adminOpen) return;
+    state.adminOpen[d.dataset.key] = d.open;
+  }, true);
   document.addEventListener('change', function (ev) {
     var t = ev.target;
     if (t.id === 'fileCam' || t.id === 'fileLib') { addFiles(t.files); t.value = ''; return; }
@@ -2025,7 +2039,11 @@ function renderEditor() {
     if (t.classList && t.classList.contains('upchk')) { state.up.sel[t.dataset.uid] = t.checked; return paintBulk(); }
     if (t.classList && t.classList.contains('todochk')) return setTodoDone(t.dataset.id, t.checked, t);
     if (t.classList && t.classList.contains('taskchk')) return setTaskDone(t.dataset.id, t.checked, t);
-    if (t.classList && t.classList.contains('permchk')) return setPerm(t.dataset.email, t.dataset.perm, t.checked, t);
+    if (t.classList && t.classList.contains('permchk')) {
+      var box = t.closest('details.user'), cnt = box && box.querySelector('.ucount');
+      if (cnt) cnt.textContent = box.querySelectorAll('.permchk:checked').length + ' of ' + box.querySelectorAll('.permchk').length + ' on';
+      return setPerm(t.dataset.email, t.dataset.perm, t.checked, t);
+    }
     if (t.classList && t.classList.contains('stsel')) return changeStatus(t);
     if (t.classList && t.classList.contains('phasechk')) {
       var ph = $$('.phasechk').filter(function (c) { return c.checked; }).map(function (c) { return c.value; });

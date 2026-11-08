@@ -537,3 +537,14 @@ html.net-busy body::before { content: ""; position: fixed; top: 0; left: 0; righ
 .jobrow .jobcell { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .jobrow .jobcell .job { width: 100%; }
 .jobrow .stsel { min-height: 36px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; background: #f8fafc; color: #344054; max-width: 100%; }
+/* Admin: each section folds open and shut */
+details.user > summary { cursor: pointer; list-style: none; min-height: 44px; }
+details.user > summary::-webkit-details-marker { display: none; }
+details.user > summary::before { content: "\25B8"; color: var(--blue); font-size: 14px; margin-right: 6px; display: inline-block; transition: transform .15s; }
+details.user[open] > summary::before { transform: rotate(90deg); }
+details.user:not([open]) { padding-bottom: 8px; }
+details.user .ucount { margin-left: auto; }
+.lab.labrow { display: flex; align-items: center; gap: 8px; }
+.lab .expall { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.user.feats > summary.uhead { display: block; }
+.user.feats > summary.uhead > span { display: block; margin-top: 4px; }
