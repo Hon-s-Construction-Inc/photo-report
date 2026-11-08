@@ -392,11 +392,12 @@
       // Only the Statuses an Admin allowed this person; a job outside them shows its Status without a picker.
       var allow = state.statusAllowed, mine = edit && (!allow || allow.indexOf(j.phase) > -1);
       var opts = mine ? state.statusOptions.filter(function (o) { return !allow || allow.indexOf(o) > -1; }) : [];
-      var st = mine ? '<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Status of ' + esc(jn(j)) + '">' +
+      // A small ▾ bubble on the job card opens the Status list (a real, invisible <select> sits on top of it).
+      var st = mine ? '<span class="stbub" title="Change Status">▾<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Change Status of ' + esc(jn(j)) + '">' +
           opts.map(function (o) { return '<option' + (o === j.phase ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
-          (opts.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select>' : '';
+          (opts.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select></span>' : '';
       return '<div class="jobrow' + (mine ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-        '<span class="name">' + esc(jn(j)) + '</span>' + (mine ? '' : '<span class="phase">' + esc(j.phase || '') + '</span>') + '</button>' + st + '</div></div>';
+        '<span class="name">' + esc(jn(j)) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button>' + st + '</div></div>';
     }).join('') + '</div>';
   }
   function changeStatus(sel) {
