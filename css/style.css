@@ -589,3 +589,9 @@ details.user .ucount { margin-left: auto; }
 .home .ltools .stf details.stfd > summary { height: 36px; white-space: nowrap; }
 .home .ltools .stf .stfm { left: auto; right: 0; top: 40px; }
 @media (max-width: 760px) { .home .ltools.stf-spacer { display: none; } }
+/* Chosen Statuses shown as chips under the list search */
+.home .stchips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 8px; }
+.home .stchips:empty { display: none; }
+.home .stchip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border-radius: 999px; background: #eef4ff; border: 1px solid #c7d7fe; color: #1849a9; font-size: 13px; font-weight: 600; }
+.home .stchip button { border: 0; background: none; color: #1849a9; font-size: 16px; line-height: 1; width: 28px; height: 28px; border-radius: 999px; cursor: pointer; }
+.home .stchip button:hover { background: #d1e0ff; }

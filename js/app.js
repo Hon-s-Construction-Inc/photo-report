@@ -335,7 +335,19 @@
     return '<input type="search" class="listq" data-list="' + k + '" placeholder="Search this list" aria-label="Search this list" autocomplete="off" value="' + esc(v) + '">';
   }
   // Under each list title: a search box as wide as the list, with the Status filter at its right.
-  function listTools(k) { return '<div class="ltools">' + listSearch(k) + '<div class="stf" id="stf-' + k + '"></div></div>'; }
+  function listTools(k) { return '<div class="ltools">' + listSearch(k) + '<div class="stf" id="stf-' + k + '"></div></div><div class="stchips" id="stc-' + k + '"></div>'; }
+  // When only some Statuses are chosen, they show as chips under the search box; tap x to drop one, Clear for all.
+  function statusChips(k) {
+    var el = $('#stc-' + k); if (!el) return;
+    var pick = state.listSt && state.listSt[k];
+    if (!pick) { el.innerHTML = ''; return; }
+    el.innerHTML = '<span class="small muted">Showing:</span>' +
+      (pick.length ? pick.map(function (s) {
+        return '<span class="stchip">' + esc(s) + '<button type="button" data-act="stfDrop" data-list="' + k + '" data-st="' + esc(s) + '" aria-label="Stop showing ' + esc(s) + '">&times;</button></span>';
+      }).join('') : '<span class="small">no Status</span>') +
+      '<button type="button" class="link small" data-act="stfClear" data-list="' + k + '">Show all</button>';
+  }
+  function rerenderList(k) { ({ my: renderMyJobs, active: renderActiveJobs, wo: renderWoJobs })[k](); }
   function listFilter(k, list) {
     if (!list) return list;
     var q = String((state.listQ && state.listQ[k]) || '').toLowerCase().trim();
@@ -359,6 +371,7 @@
     (list || []).forEach(function (j) { seen[phaseOf(j) || '(no Status)'] = true; });
     var opts = order.filter(function (o) { return seen[o]; }).concat(Object.keys(seen).filter(function (o) { return order.indexOf(o) < 0; }));
     var pick = state.listSt && state.listSt[k];
+    statusChips(k);
     var sig = JSON.stringify([opts, pick]);
     if (el.dataset.sig === sig) return;           // unchanged: keep the drop list as it is (and open, if open)
     var wasOpen = !!el.querySelector('details[open]');
@@ -2031,6 +2044,12 @@ function renderEditor() {
       case 'taskNote': el.closest('.task').classList.toggle('open'); return;
       case 'taskJob': return can('report') ? pullJob({ id: el.dataset.id, name: el.dataset.name }) : openFiles({ id: el.dataset.id, name: el.dataset.name }, 'search');
       case 'admin': return openAdmin();
+      case 'stfDrop': {
+        var cur = (state.listSt[el.dataset.list] || []).filter(function (s) { return s !== el.dataset.st; });
+        state.listSt[el.dataset.list] = cur.length ? cur : null;
+        return rerenderList(el.dataset.list);
+      }
+      case 'stfClear': state.listSt[el.dataset.list] = null; return rerenderList(el.dataset.list);
       case 'stAll': {
         var on = el.dataset.on === '1';
         $$('.stchk').forEach(function (c) { if (c.dataset.email === el.dataset.email) c.checked = on; });
