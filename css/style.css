@@ -492,36 +492,37 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
 @media (max-width: 600px) { body.editing .topbar [data-act=editorFiles] { display: none; } }   /* Files and plans is one tap away from Jobs */
 
 /* Home: Active jobs. iPad: under My jobsite. Phone: under Action. */
-.cols { grid-template-areas: "my act" "active act"; }
+.cols { grid-template-areas: "my act" "active wo"; align-items: start; }
 .cols > .col:first-child { grid-area: my; }
 .cols > .col.act { grid-area: act; }
 .cols > .col.active { grid-area: active; }
-@media (max-width: 760px) { .cols { grid-template-areas: "my" "act" "active"; } }
-.home #activeJobs { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; max-height: 60vh; overflow: auto; -webkit-overflow-scrolling: touch; }
-.home #activeJobs .results { gap: 6px; }
-.home #activeJobs .job { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
-.home #activeJobs .phase { font-size: 12px; font-weight: 600; color: var(--muted); background: #f2f4f7; border-radius: 999px; padding: 2px 8px; white-space: nowrap; flex: none; }
-.home #activeJobs .job.picked .phase { background: rgba(255,255,255,.2); color: #fff; }
-.home #activeJobs .star.on[hidden] + .job { margin-left: 52px; }
+.cols > .col.wo { grid-area: wo; }
+@media (max-width: 760px) { .cols { grid-template-areas: "my" "act" "active" "wo"; } }
+.home :is(#activeJobs, #woJobs) { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; max-height: 60vh; overflow: auto; -webkit-overflow-scrolling: touch; }
+.home :is(#activeJobs, #woJobs) .results { gap: 6px; }
+.home :is(#activeJobs, #woJobs) .job { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
+.home :is(#activeJobs, #woJobs) .phase { font-size: 12px; font-weight: 600; color: var(--muted); background: #f2f4f7; border-radius: 999px; padding: 2px 8px; white-space: nowrap; flex: none; }
+.home :is(#activeJobs, #woJobs) .job.picked .phase { background: rgba(255,255,255,.2); color: #fff; }
+.home :is(#activeJobs, #woJobs) .star.on[hidden] + .job { margin-left: 52px; }
 .home #myJobs { min-height: 0; }
 @media (max-width: 600px) {
   .topbar > .logo-sm { order: 0; }                       /* home bar: logo, app name, Settings on row 1 */
   .selbox { flex-wrap: wrap; row-gap: 6px; margin: 10px 0 12px; }
   .selname { flex-wrap: wrap; font-size: 18px; row-gap: 6px; }
   .selname .star.full { margin-left: 0; }
-  .home #activeJobs .job { flex-direction: column; align-items: flex-start; gap: 4px; }
-  .home #activeJobs { max-height: none; }
+  .home :is(#activeJobs, #woJobs) .job { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .home :is(#activeJobs, #woJobs) { max-height: none; }
 }
 
 /* Labels on one line so My jobsite and Action frames start level. */
 .home .cols .lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Active jobs: thinner rows, name on top, status underneath. */
-.home #activeJobs .results { gap: 4px; }
-.home #activeJobs .job { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 0; padding: 6px 12px; }
-.home #activeJobs .job .name { font-size: 16px; line-height: 1.25; }
-.home #activeJobs .phase { font-size: 11px; padding: 0; background: none; color: var(--muted); font-weight: 600; }
-.home #activeJobs .job.picked .phase { background: none; color: #dbe9fb; }
-.home #activeJobs .jobrow .star { min-height: 0; align-self: stretch; }
+.home :is(#activeJobs, #woJobs) .results { gap: 4px; }
+.home :is(#activeJobs, #woJobs) .job { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 0; padding: 6px 12px; }
+.home :is(#activeJobs, #woJobs) .job .name { font-size: 16px; line-height: 1.25; }
+.home :is(#activeJobs, #woJobs) .phase { font-size: 11px; padding: 0; background: none; color: var(--muted); font-weight: 600; }
+.home :is(#activeJobs, #woJobs) .job.picked .phase { background: none; color: #dbe9fb; }
+.home :is(#activeJobs, #woJobs) .jobrow .star { min-height: 0; align-self: stretch; }
 
 /* Thin moving bar while the app waits for the server */
 html.net-busy body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 9999; background: linear-gradient(90deg, transparent, var(--blue), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: netbar 1.1s linear infinite; }

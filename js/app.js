@@ -169,8 +169,9 @@
       '<div class="selbox" id="selbox"></div>' +
       '<div class="cols"><section class="col"><div class="lab">My jobsite</div><div id="myJobs"></div></section>' +
       '<section class="col act"><div class="lab">Action</div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab">Active jobs <span class="small muted">&middot; tap + to add to My jobsite</span></div><div id="activeJobs"></div></section></div></main>';
-    renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs();
+      '<section class="col active"><div class="lab">Active jobs <span class="small muted">&middot; tap + to add to My jobsite</span></div><div id="activeJobs"></div></section>' +
+      '<section class="col wo"><div class="lab">Work orders <span class="small muted">&middot; open</span></div><div id="woJobs"></div></section></div></main>';
+    renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
 
@@ -311,7 +312,7 @@
       b.classList.toggle('on', on); b.classList.toggle('add', !on); b.innerHTML = starText(on, full); b.disabled = on; b.hidden = on && !full;
       b.title = on ? 'In My jobsite (remove it with the x in the list)' : 'Add to My jobsite';
     });
-    renderMyJobs(); renderActions(); renderActiveJobs();
+    renderMyJobs(); renderActions(); renderActiveJobs(); renderWoJobs();
     if (state.view === 'upload' && state.up && !state.up.job) paintJobResults();
   }
   function renderMyJobs() {
@@ -331,12 +332,29 @@
     API.call('phaseJobs').then(function (r) { state.active = r.jobs || []; activeAt = Date.now(); renderActiveJobs(); })
       .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.active = state.active || []; state.activeFailed = true; renderActiveJobs(); });
   }
+  // Work orders have their own list, so they are left out of Active jobs.
+  function woIds() { var o = {}; (state.wo || []).forEach(function (j) { o[j.id] = true; }); return o; }
   function renderActiveJobs() {
     var box = $('#activeJobs'); if (!box) return;
-    var list = state.active;
+    var wo = woIds(), list = state.active && state.active.filter(function (j) { return !wo[j.id]; });
     if (!list) { box.innerHTML = '<p class="small muted">Loading jobs...</p>'; return; }
     if (!list.length) { box.innerHTML = '<p class="small muted">' + (state.activeFailed ? 'Could not load the job list.' : 'No jobs in the chosen phases.') + '</p>'; return; }
-    box.innerHTML = '<div class="results">' + sortMyJobs(list).map(function (j) {
+    box.innerHTML = jobListHtml(list);
+  }
+  var woAt = 0;
+  function loadWoJobs(force) {
+    if (!force && state.wo && Date.now() - woAt < 120000) return;
+    API.call('woJobs').then(function (r) { state.wo = r.jobs || []; woAt = Date.now(); state.woFailed = false; renderWoJobs(); renderActiveJobs(); })
+      .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.wo = state.wo || []; state.woFailed = true; renderWoJobs(); });
+  }
+  function renderWoJobs() {
+    var box = $('#woJobs'); if (!box) return;
+    if (!state.wo) { box.innerHTML = '<p class="small muted">Loading work orders...</p>'; return; }
+    if (!state.wo.length) { box.innerHTML = '<p class="small muted">' + (state.woFailed ? 'Could not load the work orders.' : 'No open work orders.') + '</p>'; return; }
+    box.innerHTML = jobListHtml(state.wo);
+  }
+  function jobListHtml(list) {
+    return '<div class="results">' + sortMyJobs(list).map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
         '<span class="name">' + esc(jn(j)) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button></div>';
@@ -1851,11 +1869,11 @@ function renderEditor() {
       case 'useOther': state.loginStep = 'email'; return renderLogin();
       case 'signOut': API.clearSession(); state.user = null; state.loginStep = 'email'; return go('login');
       case 'pick': {
-        var pj = state.jobs.concat(state.myJobs, state.active || []).filter(function (j) { return j.id === el.dataset.id; })[0] || null;
+        var pj = state.jobs.concat(state.myJobs, state.active || [], state.wo || []).filter(function (j) { return j.id === el.dataset.id; })[0] || null;
         if (pj) pj = { id: pj.id, name: pj.name };
         state.pickedJob = pj && state.pickedJob && state.pickedJob.id === pj.id ? state.pickedJob : pj;
         if (el.closest('#results')) { state.query = ''; state.jobs = []; var qi = $('#q'); if (qi) qi.value = ''; }
-        renderResults(); renderMyJobs(); renderActiveJobs(); return renderActions();
+        renderResults(); renderMyJobs(); renderActiveJobs(); renderWoJobs(); return renderActions();
       }
       case 'menu': { ev.stopPropagation(); var m = el.nextElementSibling, open = m.hidden; closeMenus(); m.hidden = !open; el.setAttribute('aria-expanded', open); return; }
       case 'help': closeMenus(); return go('help');
