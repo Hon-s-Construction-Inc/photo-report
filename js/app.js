@@ -207,7 +207,7 @@
   function renderActions() {
     var j = state.pickedJob, sb = $('#selbox'); if (!sb) return;
     sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(jn(j)) +
-      '<button class="btn small notebtn' + (noteGet(j.id) ? ' has' : '') + '" data-act="noteToggle" aria-expanded="' + !!state.noteOpen + '">&#128221; My notes</button>' + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
+      '<button class="btn small notebtn' + (noteGet(j.id) ? ' has' : '') + '" data-act="noteToggle" aria-expanded="' + !!state.noteOpen + '">&#128221; My notes</button>' + starBtn(j, true) : 'Find a job above, or tap one in any list below') + '</div>';
     renderNote();
     // The app draws its own menu (not the browser's <select>) so each row is tall enough for a gloved finger.
     var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
