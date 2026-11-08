@@ -118,6 +118,7 @@
     else if (state.view === 'todos') renderTodos();
     else if (state.view === 'newjob') renderNewJob();
     else if (state.view === 'movetemp') renderMoveTemp();
+    else if (state.view === 'editjob') renderEditJob();
   }
 
   function handleError(err, msgEl) {
@@ -229,7 +230,7 @@
     var tmp = j && j.temp;   // a temporary job only has photos until an Admin moves it to a real job
     var items = (tmp ? '' : o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload'))) +
       o('goGallery', 'Photos', can('photos') || can('report') || can('upload')) +
-      (tmp ? '' : o('goAssign', 'Assign project manager', canAssign()));
+      (tmp ? '' : o('goAssign', 'Assign project manager', canAssign()) + o('goEditJob', 'Edit job information', canAssign() && canWrite()));
     var box = $('#actionBox'); if (!box) return;
     if (!items) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
     box.innerHTML = '<div class="actwrap"><button id="actionSel" class="actionsel" data-act="actMenu" aria-haspopup="menu" aria-expanded="false"' + (j ? '' : ' disabled') + '>' +
@@ -253,6 +254,7 @@
       case 'goUpload': return openUpload(j, 'search');
       case 'goReport': return pullJob(j);
       case 'goAssign': return openAssign(j);
+      case 'goEditJob': return openEditJob(j);
     }
   }
 
@@ -2231,6 +2233,78 @@ function renderEditor() {
   }
 
   /* --- Admin: move a temporary job's photos to the real job */
+  /* ------------------------------------------------------------------ Edit job information (Admins, Operations Manager) */
+  function openEditJob(j) {
+    state.ej = { job: j, info: null, busy: false, msg: '' };
+    go('editjob');
+    API.call('jobInfo', { jobId: j.id }).then(function (r) {
+      if (!state.ej || state.ej.job !== j) return;
+      state.ej.info = r.job; state.ej.fields = r.fields || []; state.ej.custName = r.job.customer ? r.job.customer.name : '';
+      renderEditJob();
+    }).catch(function (e) { handleError(e, $('#ejMsg')); });
+  }
+  function renderEditJob() {
+    var e = state.ej, i = e && e.info;
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="ejBack">&larr; Back</button><div class="grow"><div class="title">Edit job information</div></div></header>' +
+      '<main class="page newjob"><div class="card">' +
+      (!i ? '<p class="small muted">Loading from JobTread...</p><p class="small msg" id="ejMsg"></p>' :
+        '<label class="lab" for="ejName">Job name <span class="small muted" id="ejCnt"></span></label><input id="ejName" maxlength="30" value="' + esc(i.name) + '">' +
+        '<label class="lab" for="ejLong">Project Long Name <span class="small muted">(shown in this app)</span></label><input id="ejLong" maxlength="200" value="' + esc(i.longName) + '">' +
+        '<label class="lab" for="ejAddr">Address</label><input id="ejAddr" maxlength="200" value="' + esc(i.address) + '" placeholder="Street, city">' +
+        e.fields.map(function (f) {
+          var cur = i.values[f.id] || '';
+          return '<label class="lab" for="ejf_' + esc(f.id) + '">' + esc(f.name) + '</label><select id="ejf_' + esc(f.id) + '" class="ejsel" data-fid="' + esc(f.id) + '">' +
+            (cur ? '' : '<option value="" selected>(not set)</option>') +
+            f.options.map(function (o) { return '<option' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+            (cur && f.options.indexOf(cur) < 0 ? '<option selected>' + esc(cur) + '</option>' : '') + '</select>';
+        }).join('') +
+        '<button class="btn primary big" data-act="ejSave"' + (e.busy ? ' disabled' : '') + '>' + (e.busy ? 'Saving...' : 'Save to JobTread') + '</button>' +
+        '<p class="small msg" id="ejMsg"></p>' +
+        '<div class="ejcust"><div class="lab">Customer</div>' +
+        (i.customer ? '<input id="ejCust" maxlength="100" value="' + esc(e.custName) + '">' +
+          '<button class="btn" data-act="ejRename">Rename customer</button>' +
+          '<p class="small muted">Renaming changes it on <b>all ' + i.customer.jobs + ' job' + (i.customer.jobs === 1 ? '' : 's') + '</b> of this customer. ' +
+          'To move this job to a different customer, do it in JobTread (JobTread does not let other apps do that).</p>'
+          : '<p class="small muted">This job has no customer in JobTread.</p>') +
+        '<div class="lab">Add a new customer</div><input id="ejNewCust" maxlength="100" placeholder="New customer name">' +
+        '<button class="btn" data-act="ejAddCust">Add customer to JobTread</button><p class="small msg" id="ejCustMsg"></p></div>') +
+      '</div></main>';
+    ejCount();
+  }
+  function ejCount() { var n = $('#ejName'), c = $('#ejCnt'); if (n && c) c.textContent = '(' + n.value.length + ' of 30)'; }
+  function ejSave() {
+    var e = state.ej, i = e.info; if (!i || e.busy) return;
+    var f = {}; $$('.ejsel').forEach(function (s) { f[s.dataset.fid] = s.value; });
+    var body = { jobId: i.id, name: $('#ejName').value, longName: $('#ejLong').value, address: $('#ejAddr').value, fields: f };
+    if (body.name.trim().length < 3) { $('#ejMsg').textContent = 'The job name needs at least 3 letters.'; return; }
+    e.busy = true; var b = $('[data-act="ejSave"]'); if (b) { b.disabled = true; b.textContent = 'Saving...'; }
+    API.call('saveJobInfo', body).then(function (r) {
+      e.busy = false;
+      var j = Object.assign({}, e.job, { name: r.job.name, longName: r.job.longName });
+      if (state.pickedJob && state.pickedJob.id === j.id) state.pickedJob = j;
+      state.myJobs = (state.myJobs || []).map(function (m) { return m.id === j.id ? Object.assign({}, m, { name: j.name, longName: j.longName }) : m; });
+      go('search'); loadActiveJobs(true); loadWoJobs(true);
+      toast(r.changed ? 'Saved to JobTread (' + r.changed + ' change' + (r.changed === 1 ? '' : 's') + ').' : 'Nothing changed.');
+    }).catch(function (err) { e.busy = false; if (b) { b.disabled = false; b.textContent = 'Save to JobTread'; } handleError(err, $('#ejMsg')); });
+  }
+  function ejRename() {
+    var e = state.ej, c = e.info && e.info.customer, v = ($('#ejCust').value || '').trim(); if (!c) return;
+    if (v === c.name) { $('#ejCustMsg').textContent = 'The name is the same.'; return; }
+    if (!confirm('Rename customer\n"' + c.name + '"\nto\n"' + v + '"?\n\nThis changes it on all ' + c.jobs + ' jobs of this customer in JobTread.')) return;
+    $('#ejCustMsg').textContent = 'Saving...';
+    API.call('renameCustomer', { accountId: c.id, name: v }).then(function (r) { c.name = r.name; e.custName = r.name; $('#ejCustMsg').textContent = 'Customer renamed in JobTread.'; })
+      .catch(function (err) { handleError(err, $('#ejCustMsg')); });
+  }
+  function ejAddCust() {
+    var v = ($('#ejNewCust').value || '').trim();
+    if (v.length < 2) { $('#ejCustMsg').textContent = 'Type the new customer name.'; return; }
+    if (!confirm('Add the customer "' + v + '" to JobTread?')) return;
+    $('#ejCustMsg').textContent = 'Saving...';
+    API.call('addCustomer', { name: v }).then(function (r) { $('#ejNewCust').value = ''; $('#ejCustMsg').textContent = 'Customer "' + r.name + '" added to JobTread.'; })
+      .catch(function (err) { handleError(err, $('#ejCustMsg')); });
+  }
+
   function openMoveTemp(id) {
     var tj = (state.temps || []).filter(function (x) { return x.id === id; })[0]; if (!tj) return;
     state.mv = { temp: tj, mode: 'new', q: '', jobs: [], target: null, busy: false,
@@ -2361,6 +2435,10 @@ function renderEditor() {
       case 'njCreate': return createNewJob();
       case 'moveTemp': return openMoveTemp(el.dataset.id);
       case 'mvBack': return go('search');
+      case 'ejBack': state.ej = null; return go('search');
+      case 'ejSave': return ejSave();
+      case 'ejRename': return ejRename();
+      case 'ejAddCust': return ejAddCust();
       case 'mvMode': mvKeep(); state.mv.mode = el.dataset.mode === 'new' ? 'new' : 'old'; return renderMoveTemp();
       case 'mvPickCust': mvKeep(); state.mv.cust = state.mv.custs[Number(el.dataset.i)]; return renderMoveTemp();
       case 'mvCustClear': mvKeep(); state.mv.cust = null; return renderMoveTemp();
@@ -2503,6 +2581,8 @@ function renderEditor() {
     if (t.id === 'njCustQ') return onCustSearch(t.value);
     if (t.id === 'mvQ') return onMvSearch(t.value);
     if (t.id === 'mvNewCust') return onMvCust(t.value);
+    if (t.id === 'ejName') return ejCount();
+    if (t.id === 'ejCust' && state.ej) { state.ej.custName = t.value; return; }
     if (t.id === 'mvName' && state.mv) { state.mv.name = t.value; var gb = $('[data-act="mvGo"]'); if (gb && !state.mv.busy) gb.disabled = !(t.value.trim().length >= 3 && (state.mv.cust || state.mv.newCust.trim().length >= 2)); return; }
     if (t.id === 'noteText' && state.pickedJob) {
       var had = !!noteGet(state.pickedJob.id);
