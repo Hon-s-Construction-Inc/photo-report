@@ -565,3 +565,10 @@ details.user .ucount { margin-left: auto; }
 .home .cols .lab .listq { height: 32px; min-height: 0; margin-top: 0; margin-bottom: 0; }
 .home .cols .lab.labrow { height: 36px; }
 .home :is(#activeJobs, #woJobs) .jobrow.hasst .job { padding-right: 52px; }
+/* Status filter under each home list: a drop list of check boxes */
+.home .stf { min-height: 34px; margin: -2px 0 6px; position: relative; }
+.home .stf details.stfd > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 13px; color: var(--blue); }
+.home .stf details.stfd > summary::-webkit-details-marker { display: none; }
+.home .stf .stfm { position: absolute; z-index: 30; top: 36px; left: 0; min-width: 240px; max-height: 60vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(16,24,40,.12); padding: 6px 10px; display: grid; gap: 2px; }
+.home .stf .stfm .perm { min-height: 40px; }
+@media (max-width: 760px) { .home .stf-spacer { display: none; } }

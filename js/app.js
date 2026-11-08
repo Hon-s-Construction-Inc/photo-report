@@ -167,10 +167,10 @@
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div>' +
-      '<div class="cols"><section class="col"><div class="lab labrow">My jobsite' + listSearch('my') + '</div><div id="myJobs"></div></section>' +
-      '<section class="col act"><div class="lab labrow">Action</div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + listSearch('active') + '</div><div id="activeJobs"></div></section>' +
-      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + listSearch('wo') + '</div><div id="woJobs"></div></section></div></main>';
+      '<div class="cols"><section class="col"><div class="lab labrow">My jobsite' + listSearch('my') + '</div><div class="stf" id="stf-my"></div><div id="myJobs"></div></section>' +
+      '<section class="col act"><div class="lab labrow">Action</div><div class="stf stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
+      '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + listSearch('active') + '</div><div class="stf" id="stf-active"></div><div id="activeJobs"></div></section>' +
+      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + listSearch('wo') + '</div><div class="stf" id="stf-wo"></div><div id="woJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
@@ -220,6 +220,7 @@
       '<button data-act="signOut">Sign out</button></div></div>';
   }
   function closeMenus() {
+    $$('.stf details[open]').forEach(function (d) { d.open = false; });
     $$('.ddm, .actmenu, .swapmenu').forEach(function (m) { m.hidden = true; });
     $$('.dd > .btn, #actionSel').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
@@ -334,18 +335,53 @@
     return '<input type="search" class="listq" data-list="' + k + '" placeholder="Search this list" aria-label="Search this list" autocomplete="off" value="' + esc(v) + '">';
   }
   function listFilter(k, list) {
+    if (!list) return list;
     var q = String((state.listQ && state.listQ[k]) || '').toLowerCase().trim();
-    if (!q || !list) return list;
-    var words = q.split(/\s+/);
+    var pick = state.listSt && state.listSt[k];
+    var words = q ? q.split(/\s+/) : [];
     return list.filter(function (j) {
+      if (pick && pick.indexOf(phaseOf(j) || '(no Status)') < 0) return false;
       var hay = (jn(j) + ' ' + (j.name || '') + ' ' + (j.phase || '')).toLowerCase();
       return words.every(function (w) { return hay.indexOf(w) > -1; });
     });
   }
-  function noMatch(k) { return '<p class="small muted">No job in this list matches "' + esc(state.listQ[k]) + '".</p>'; }
+  function noMatch(k) {
+    var q = state.listQ && state.listQ[k];
+    return '<p class="small muted">No job in this list matches' + (q ? ' "' + esc(q) + '"' : '') + (state.listSt && state.listSt[k] ? ' the chosen Status' : '') + '.</p>';
+  }
+  // Status filter under each list: a drop list of check boxes, one per Status found in that list, plus All.
+  function statusFilter(k, list) {
+    var el = $('#stf-' + k); if (!el) return;
+    var order = state.statusOptions || [];
+    var seen = {};
+    (list || []).forEach(function (j) { seen[phaseOf(j) || '(no Status)'] = true; });
+    var opts = order.filter(function (o) { return seen[o]; }).concat(Object.keys(seen).filter(function (o) { return order.indexOf(o) < 0; }));
+    var pick = state.listSt && state.listSt[k];
+    var sig = JSON.stringify([opts, pick]);
+    if (el.dataset.sig === sig) return;           // unchanged: keep the drop list as it is (and open, if open)
+    var wasOpen = !!el.querySelector('details[open]');
+    el.dataset.sig = sig;
+    var label = !pick ? 'All Statuses' : pick.length === 1 ? pick[0] : pick.length + ' Statuses';
+    el.innerHTML = '<details class="stfd"' + (wasOpen ? ' open' : '') + '><summary><span class="small muted">Status:</span> <b>' + esc(label) + '</b> <span aria-hidden="true">\u25be</span></summary><div class="stfm">' +
+      '<label class="perm"><input type="checkbox" class="stfchk" data-list="' + k + '" value="__all"' + (!pick ? ' checked' : '') + '><span><b>All</b></span></label>' +
+      opts.map(function (o) {
+        return '<label class="perm"><input type="checkbox" class="stfchk" data-list="' + k + '" value="' + esc(o) + '"' + (!pick || pick.indexOf(o) > -1 ? ' checked' : '') + '><span>' + esc(o) + '</span></label>';
+      }).join('') + '</div></details>';
+  }
+  function onStatusFilter(t) {
+    var k = t.dataset.list, all = $$('.stfchk').filter(function (c) { return c.dataset.list === k && c.value !== '__all'; });
+    state.listSt = state.listSt || {};
+    if (t.value === '__all') state.listSt[k] = t.checked ? null : [];
+    else {
+      var on = all.filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
+      state.listSt[k] = on.length === all.length ? null : on;
+    }
+    ({ my: renderMyJobs, active: renderActiveJobs, wo: renderWoJobs })[k]();
+  }
   function renderMyJobs() {
     var box = $('#myJobs'); if (!box) return;
     if (!state.myJobs.length) { box.innerHTML = '<p class="small muted">No jobs marked yet.</p>'; return; }
+    statusFilter('my', state.myJobs);
     var shown = sortMyJobs(listFilter('my', state.myJobs));
     if (!shown.length) { box.innerHTML = noMatch('my'); return; }
     box.innerHTML = '<div class="results">' + shown.map(function (j) {
@@ -370,6 +406,7 @@
     setCount('#activeCnt', state.activeFailed ? null : list);
     if (!list) { box.innerHTML = '<p class="small muted">Loading jobs...</p>'; return; }
     if (!list.length) { box.innerHTML = '<p class="small muted">' + (state.activeFailed ? 'Could not load the job list.' : 'No jobs in the chosen phases.') + '</p>'; return; }
+    statusFilter('active', list);
     var shown = listFilter('active', list);
     box.innerHTML = shown.length ? jobListHtml(shown) : noMatch('active');
   }
@@ -384,6 +421,7 @@
     setCount('#woCnt', state.woFailed ? null : state.wo);
     if (!state.wo) { box.innerHTML = '<p class="small muted">Loading work orders...</p>'; return; }
     if (!state.wo.length) { box.innerHTML = '<p class="small muted">' + (state.woFailed ? 'Could not load the work orders. If this stays, the latest Code.gs is not deployed yet.' : 'No open work orders.') + '</p>'; return; }
+    statusFilter('wo', state.wo);
     var shown = listFilter('wo', state.wo);
     box.innerHTML = shown.length ? jobListHtml(shown, { byStatus: true }) : noMatch('wo');
   }
@@ -1943,7 +1981,7 @@ function renderEditor() {
 
   document.addEventListener('click', function (ev) {
     // Menus stay open while a tap lands inside them: iPadOS drops the photo picker if its button is hidden mid-tap.
-    if (!ev.target.closest('.dd, .swapmenu, .actmenu')) closeMenus();
+    if (!ev.target.closest('.dd, .swapmenu, .actmenu, .stf')) closeMenus();
     if (ev.target.id === 'sheet') return closeSheet();
     var inSec = ev.target.closest('#sections .sec');
     if (inSec) setActive(Number(inSec.dataset.sec));
@@ -2104,6 +2142,7 @@ function renderEditor() {
     }
     if (t.classList && t.classList.contains('stsel')) return changeStatus(t);
     if (t.classList && t.classList.contains('stchk')) return saveStatuses(t.dataset.email);
+    if (t.classList && t.classList.contains('stfchk')) return onStatusFilter(t);
     if (t.classList && t.classList.contains('phasechk')) {
       var ph = $$('.phasechk').filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
       $$('.phasechk').forEach(function (c) { c.disabled = true; });
