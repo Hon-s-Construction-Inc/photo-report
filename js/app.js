@@ -345,7 +345,7 @@
   var woAt = 0;
   function loadWoJobs(force) {
     if (!force && state.wo && Date.now() - woAt < 120000) return;
-    API.call('woJobs').then(function (r) { state.wo = r.jobs || []; woAt = Date.now(); state.woFailed = false; renderWoJobs(); renderActiveJobs(); })
+    API.call('woJobs').then(function (r) { state.wo = r.jobs || []; if (r.statusOptions) state.statusOptions = r.statusOptions; woAt = Date.now(); state.woFailed = false; renderWoJobs(); renderActiveJobs(); })
       .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.wo = state.wo || []; state.woFailed = true; renderWoJobs(); });
   }
   function renderWoJobs() {
@@ -353,15 +353,41 @@
     setCount('#woCnt', state.woFailed ? null : state.wo);
     if (!state.wo) { box.innerHTML = '<p class="small muted">Loading work orders...</p>'; return; }
     if (!state.wo.length) { box.innerHTML = '<p class="small muted">' + (state.woFailed ? 'Could not load the work orders. If this stays, the latest Code.gs is not deployed yet.' : 'No open work orders.') + '</p>'; return; }
-    box.innerHTML = jobListHtml(state.wo);
+    box.innerHTML = jobListHtml(state.wo, { byStatus: true });
   }
   function setCount(sel, list) { var el = $(sel); if (el) el.textContent = list ? '(' + list.length + ')' : ''; }
-  function jobListHtml(list) {
-    return '<div class="results">' + sortMyJobs(list).map(function (j) {
+  // Who may change a job's Status here: the "status" switch (Admin screen) and a working JobTread key.
+  function canStatus() { return !!(state.perms && state.perms.status === true && canWrite() && (state.statusOptions || []).length); }
+  // Order by JobTread's Status order (A New Lead first), then by address.
+  function byStatus(list) {
+    var opts = state.statusOptions || [];
+    return sortMyJobs(list).sort(function (a, b) {
+      var ia = opts.indexOf(a.phase), ib = opts.indexOf(b.phase);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+  }
+  function jobListHtml(list, opts) {
+    var edit = canStatus();
+    return '<div class="results">' + ((opts && opts.byStatus) ? byStatus(list) : sortMyJobs(list)).map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
-      return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-        '<span class="name">' + esc(jn(j)) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button></div>';
+      var st = edit ? '<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Status of ' + esc(jn(j)) + '">' +
+          state.statusOptions.map(function (o) { return '<option' + (o === j.phase ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+          (state.statusOptions.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select>' : '';
+      return '<div class="jobrow' + (edit ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
+        '<span class="name">' + esc(jn(j)) + '</span>' + (edit ? '' : '<span class="phase">' + esc(j.phase || '') + '</span>') + '</button>' + st + '</div></div>';
     }).join('') + '</div>';
+  }
+  function changeStatus(sel) {
+    var id = sel.dataset.id, to = sel.value;
+    var j = (state.wo || []).concat(state.active || []).filter(function (x) { return x.id === id; })[0];
+    if (!j || j.phase === to) return;
+    if (!confirm('Change the JobTread Status of\n' + jn(j) + '\n\nfrom "' + (j.phase || 'none') + '" to "' + to + '"?')) { sel.value = j.phase; return; }
+    sel.disabled = true;
+    API.call('setJobStatus', { jobId: id, status: to }).then(function (r) {
+      (state.wo || []).concat(state.active || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
+      toast('Status changed to ' + r.status + '.');
+      renderWoJobs(); renderActiveJobs(); loadActiveJobs(true);
+    }).catch(function (e) { sel.disabled = false; sel.value = j.phase; handleError(e); });
   }
 
   /* ------------------------------------------------------------------ pull photos */
@@ -1675,11 +1701,12 @@ function renderEditor() {
     { title: 'To-do list', keys: ['todo'] },
     { title: 'Files and plans', keys: ['files', 'costFiles'] },
     { title: 'Photos', keys: ['photos', 'upload', 'report', 'saveJT'] },
-    { title: 'Top bar', keys: ['tasks'] }
+    { title: 'Top bar', keys: ['tasks'] },
+    { title: 'Job lists on home', keys: ['status'] }
   ];
   var PERM_WORDS = {
     todo: 'See, add and tick off to-dos', files: 'See plans and job files', costFiles: 'Also see cost folders (invoices, subs, pay apps)',
-    photos: 'See job photos', upload: 'Upload photos and files', report: 'Make photo reports (PDF)', saveJT: 'Save the report PDF into JobTread', tasks: 'My tasks'
+    photos: 'See job photos', upload: 'Upload photos and files', report: 'Make photo reports (PDF)', saveJT: 'Save the report PDF into JobTread', tasks: 'My tasks', status: 'Change a job\'s Status (Active jobs and Work orders)'
   };
   function permGroups(defs, one) {
     var seen = {};
@@ -1999,6 +2026,7 @@ function renderEditor() {
     if (t.classList && t.classList.contains('todochk')) return setTodoDone(t.dataset.id, t.checked, t);
     if (t.classList && t.classList.contains('taskchk')) return setTaskDone(t.dataset.id, t.checked, t);
     if (t.classList && t.classList.contains('permchk')) return setPerm(t.dataset.email, t.dataset.perm, t.checked, t);
+    if (t.classList && t.classList.contains('stsel')) return changeStatus(t);
     if (t.classList && t.classList.contains('phasechk')) {
       var ph = $$('.phasechk').filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
       $$('.phasechk').forEach(function (c) { c.disabled = true; });
