@@ -624,6 +624,9 @@ details.user .ucount { margin-left: auto; }
 .page.newjob .card { max-width: 620px; margin: 0 auto; display: grid; gap: 8px; }
 .page.newjob .lab { margin-top: 6px; }
 .njmode { display: flex; gap: 6px; }
+.njinfo { margin: 8px 0 4px; padding: 10px 12px; border-radius: 12px; background: #eef4ff; border: 1px solid #bcd4f4; color: #1d3b6b; font-size: 14px; line-height: 1.4; }
+.njinfo.warn { background: #fffaeb; border-color: #fedf89; color: #7a2e0e; }
+.njinfo[hidden] { display: none; }
 .njmode button { flex: 1; min-height: 44px; }
 .njcust { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f8fafc; }
 .btn.big { min-height: 52px; font-size: 17px; margin-top: 8px; }

@@ -2063,54 +2063,65 @@ function renderEditor() {
     }).join('') + '</div>';
   }
   function openNewJob() {
-    state.nj = { name: state.query.trim(), address: '', note: '', mode: '', cust: null, custQ: '', custs: [], newCust: '' };
+    state.nj = { name: state.query.trim(), address: '', cust: null, custQ: '', custs: [] };
     go('newjob');
   }
+  // Customer first: typing shows matching JobTread customers to pick. A name nobody picks is a NEW customer,
+  // and the job is saved as a temporary job until the Admin makes the real one.
+  function njMode() { var n = state.nj; return n.cust ? 'cust' : n.custQ.trim().length >= 2 ? 'temp' : ''; }
   function renderNewJob() {
     var n = state.nj;
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="njBack">&larr; Back</button><div class="grow"><div class="title">New job</div></div></header>' +
       '<main class="page newjob"><div class="card">' +
+      '<label class="lab" for="njCustQ">Customer</label>' +
+      (n.cust ? '<div class="njcust"><b>' + esc(n.cust.name) + '</b> <button class="link small" data-act="njCustClear">Change</button></div>'
+        : '<input id="njCustQ" type="search" placeholder="Type the customer name" value="' + esc(n.custQ) + '" autocomplete="off"><div id="njCusts" class="results"></div>') +
+      '<div id="njInfo" class="njinfo"></div>' +
       '<label class="lab" for="njName">Job name</label><input id="njName" maxlength="100" value="' + esc(n.name) + '" placeholder="e.g. 2560 Oak St bathroom leak">' +
       '<label class="lab" for="njAddr">Address <span class="small muted">(if known)</span></label><input id="njAddr" maxlength="200" value="' + esc(n.address) + '" placeholder="Street, city">' +
-      '<label class="lab" for="njNote">Note for the office <span class="small muted">(optional)</span></label><textarea id="njNote" rows="3" maxlength="1000" placeholder="Who called, what is needed...">' + esc(n.note) + '</textarea>' +
-      '<div class="lab">Customer</div>' +
-      (n.mode === 'cust' ? '<div class="njcust"><b>' + esc(n.cust.name) + '</b> <button class="link small" data-act="njCustClear">Change</button></div>' +
-          '<p class="small muted">A real JobTread job is made now under this customer, with Status \u201cA New Lead\u201d. The office gets an email to fill in the rest.</p>'
-        : n.mode === 'temp' ? '<div class="njcust"><span class="small muted">New:</span> <input id="njNewCust" maxlength="100" value="' + esc(n.newCust) + '" placeholder="New customer name"> <button class="link small" data-act="njCustClear">Change</button></div>' +
-          '<p class="small muted">Not in JobTread yet, so this is saved as a <b>temporary job</b> with this customer name. Add photos right away. Everyone sees it under \u201cTemporary jobs\u201d; the Admin makes the real job and moves the photos.</p>'
-        : '<input id="njCustQ" type="search" placeholder="Type the customer name" value="' + esc(n.custQ) + '" autocomplete="off"><div id="njCusts" class="results"></div>') +
-      '<button class="btn primary big" data-act="njCreate"' + (n.busy || !n.mode ? ' disabled' : '') + '>' + (n.busy ? 'Saving...' : (n.mode === 'temp' ? 'Start temporary job' : n.mode === 'cust' ? 'Create job in JobTread' : 'Pick or add the customer first')) + '</button>' +
+      '<button class="btn primary big" data-act="njCreate"></button>' +
       '<p class="small msg" id="njMsg"></p></div></main>';
-    paintCusts();
+    paintCusts(); paintNjState();
+  }
+  function paintNjState() {
+    var n = state.nj, mode = njMode(), info = $('#njInfo'), b = $('[data-act="njCreate"]');
+    if (info) {
+      info.hidden = !mode;
+      info.innerHTML = mode === 'cust' ? 'Existing customer. A real JobTread job is made now, with Status “A New Lead”.'
+        : mode === 'temp' ? '<b>New customer: “' + esc(n.custQ.trim()) + '”</b><br>Not in JobTread yet, so this is saved as a <b>temporary job</b>. Add photos right away; the Admin makes the real job and moves them.' : '';
+      info.className = 'njinfo' + (mode === 'temp' ? ' warn' : '');
+    }
+    if (b) {
+      b.disabled = !!n.busy || !mode;
+      b.textContent = n.busy ? 'Saving...' : mode === 'temp' ? 'Start temporary job' : mode === 'cust' ? 'Create job in JobTread' : 'Type the customer first';
+    }
   }
   function paintCusts() {
     var box = $('#njCusts'); if (!box) return;
-    var n = state.nj;
-    var q = n.custQ.trim();
-    box.innerHTML = q.length < 2 ? '<p class="small muted">Type 2+ letters. If the customer is not in JobTread, you can add the name as a new customer.</p>' :
-      n.custs.map(function (c, i) { return '<button class="job" data-act="njPickCust" data-i="' + i + '"><span class="name">' + esc(c.name) + '</span></button>'; }).join('') +
-      (n.custs.length ? '' : '<p class="small muted">No customer found in JobTread.</p>') +
-      '<button class="job newjobrow" data-act="njNewCust"><span class="name">+ New customer: \u201c' + esc(q) + '\u201d</span></button>';
+    var n = state.nj, q = n.custQ.trim();
+    box.innerHTML = q.length < 2 || !n.custs.length ? '' :
+      '<p class="small muted">In JobTread — tap to use:</p>' +
+      n.custs.map(function (c, i) { return '<button class="job" data-act="njPickCust" data-i="' + i + '"><span class="name">' + esc(c.name) + '</span></button>'; }).join('');
   }
   var custTimer;
   function onCustSearch(v) {
-    var n = state.nj; n.custQ = v; clearTimeout(custTimer);
+    var n = state.nj; n.custQ = v; clearTimeout(custTimer); paintNjState();
     if (v.trim().length < 2) { n.custs = []; return paintCusts(); }
     custTimer = setTimeout(function () {
       API.call('customers', { q: v }).then(function (r) { if (state.nj === n) { n.custs = r.customers || []; paintCusts(); } }).catch(handleError);
     }, 300);
   }
-  function njKeep() { var n = state.nj; ['Name', 'Addr', 'Note', 'NewCust'].forEach(function (k) { var el = $('#nj' + k); if (el) n[{ Name: 'name', Addr: 'address', Note: 'note', NewCust: 'newCust' }[k]] = el.value; }); }
+  function njKeep() { var n = state.nj; ['Name', 'Addr'].forEach(function (k) { var el = $('#nj' + k); if (el) n[{ Name: 'name', Addr: 'address' }[k]] = el.value; }); }
   function njErr(t) { var el = $('#njMsg'); if (el) { el.textContent = t; el.className = 'small msg'; } }
   function createNewJob() {
     njKeep();
     var n = state.nj;
     if (n.name.trim().length < 3) return njErr('Type a job name.');
-    if (!n.mode) return njErr('Pick the customer, or add a new customer name.');
-    if (n.mode === 'temp' && n.newCust.trim().length < 2) return njErr('Type the new customer name.');
-    n.busy = true; renderNewJob();
-    API.call('newJob', { name: n.name, address: n.address, note: n.note, customerId: n.mode === 'cust' ? n.cust.id : '', customerName: n.mode === 'temp' ? n.newCust : '' }).then(function (r) {
+    var mode = njMode();
+    if (!mode) return njErr('Type the customer name.');
+    n.busy = true; paintNjState();
+    API.call('newJob', { name: n.name, address: n.address, note: '', customerId: mode === 'cust' ? n.cust.id : '', customerName: mode === 'temp' ? n.custQ.trim() : '' }).then(function (r) {
       n.busy = false;
       var j = r.job;
       if (r.temp) { state.temps = [j].concat(state.temps || []); tempsAt = 0; }
@@ -2119,7 +2130,7 @@ function renderEditor() {
       state.query = ''; state.jobs = [];
       go('search');
       toast(r.temp ? 'Temporary job started. Add photos now: Action \u2192 Photos.' : 'Job created in JobTread and added to My jobsite.');
-    }).catch(function (e) { n.busy = false; renderNewJob(); handleError(e, $('#njMsg')); });
+    }).catch(function (e) { n.busy = false; paintNjState(); handleError(e, $('#njMsg')); });
   }
 
   /* --- Admin: move a temporary job's photos to the real job */
@@ -2246,10 +2257,8 @@ function renderEditor() {
       case 'signOut': API.clearSession(); state.user = null; state.loginStep = 'email'; return go('login');
       case 'newJob': return openNewJob();
       case 'njBack': return go('search');
-      case 'njMode': njKeep(); state.nj.mode = el.dataset.mode; return renderNewJob();
-      case 'njPickCust': njKeep(); state.nj.cust = state.nj.custs[Number(el.dataset.i)]; state.nj.mode = 'cust'; return renderNewJob();
-      case 'njNewCust': njKeep(); state.nj.newCust = state.nj.custQ.trim(); state.nj.mode = 'temp'; return renderNewJob();
-      case 'njCustClear': njKeep(); state.nj.cust = null; state.nj.mode = ''; return renderNewJob();
+      case 'njPickCust': njKeep(); state.nj.cust = state.nj.custs[Number(el.dataset.i)]; return renderNewJob();
+      case 'njCustClear': njKeep(); state.nj.cust = null; return renderNewJob();
       case 'njCreate': return createNewJob();
       case 'moveTemp': return openMoveTemp(el.dataset.id);
       case 'mvBack': return go('search');
