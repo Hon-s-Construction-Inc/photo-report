@@ -9,6 +9,8 @@
   var $$ = function (sel, el) { return Array.prototype.slice.call((el || document).querySelectorAll(sel)); };
   var app = $('#app');
 
+  // A job's display name: its JobTread "Project Long Name" when it has one, else the job name.
+  function jn(j) { return (j && (API.longName(j.id) || j.longName)) || (j && j.name) || ''; }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -175,7 +177,7 @@
   // The right-hand half of the home screen: the selected job, then View / Upload buttons (only the ones this person may use).
   function renderActions() {
     var j = state.pickedJob, sb = $('#selbox'); if (!sb) return;
-    sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(j.name) + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
+    sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(jn(j)) + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
     // The app draws its own menu (not the browser's <select>) so each row is tall enough for a gloved finger.
     var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
     // Three places, each for looking AND adding: To-do list (+ Add a to-do), Files and plans (Upload),
@@ -229,7 +231,7 @@
       box.innerHTML = state.jobs.map(function (j) {
         var picked = state.pickedJob && state.pickedJob.id === j.id;
         return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-          '<span class="name">' + esc(j.name) + '<div class="sub">Created ' + esc(fmtShort(j.createdAt)) + '</div></span>' +
+          '<span class="name">' + esc(jn(j)) + '<div class="sub">Created ' + esc(fmtShort(j.createdAt)) + '</div></span>' +
           '<span class="badge' + (j.photoCount ? ' has' : '') + '">' + (j.photoCount ? 'Has photos' : 'No photos') + '</span></button></div>';
       }).join('');
     }
@@ -285,7 +287,7 @@
   function syncMyJobs() {
     API.call('getMyJobs').then(function (r) {
       var server = r.jobs || [], seen = {}, merged = [];
-      server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '' }); } });
+      server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '', longName: jn(j) !== j.name ? jn(j) : '' }); } });
       state.myJobs = sortMyJobs(merged); cacheMyJobs(); paintStars();
       if (merged.length > server.length) API.call('setMyJobs', { jobs: state.myJobs }).catch(function () { /* next time */ });
     }).catch(function () { /* keep the cached copy */ });
@@ -318,7 +320,7 @@
     box.innerHTML = '<div class="results">' + state.myJobs.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       var x = '<button class="star unstar" data-act="unstar" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-label="Remove from My jobsite" title="Remove from My jobsite">&times;</button>';
-      return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(j.name) + '</span></button></div>';
+      return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + '</span></button></div>';
     }).join('') + '</div>';
   }
 
@@ -337,7 +339,7 @@
     box.innerHTML = '<div class="results">' + sortMyJobs(list).map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-        '<span class="name">' + esc(j.name) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button></div>';
+        '<span class="name">' + esc(jn(j)) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button></div>';
     }).join('') + '</div>';
   }
 
@@ -373,7 +375,7 @@
     state.selected = []; state.sortDesc = true; state.pdf = null; state.saved = false; state.replacing = null;
     state.sections = []; state.entries = {}; state.legacyDraft = false;
     state.report = {
-      title: job.name + ' Photo Report',
+      title: jn(job) + ' Photo Report',
       author: state.user ? titleCase(state.user.name) : '',
       dateText: fmtToday(),
       layout: 'stack'
@@ -466,7 +468,7 @@ function copyLink(url) {
 function renderEditor() {
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="backToSearch">&larr; Jobs</button>' +
-      '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div>' +
+      '<div class="grow"><div class="title">' + esc(jn(state.job)) + '</div></div>' +
       '<span class="small muted">' + state.files.length + ' photos</span>' + starBtn(state.job) +
       (can('files') ? '<button class="btn small" data-act="editorFiles">Files</button>' : '') +
       settingsMenu() + '</header>' +
@@ -946,8 +948,8 @@ function renderEditor() {
     if (!photoTotal()) return;
     var pending = localInReport();
     if (pending.length && canShoot()) {
-      var msg = pending.length === 1 ? 'The report has 1 new photo from this device that is not in JobTread yet.\n\nUpload it to ' + state.job.name + ' now?'
-                                     : 'The report has ' + pending.length + ' new photos from this device that are not in JobTread yet.\n\nUpload them to ' + state.job.name + ' now?';
+      var msg = pending.length === 1 ? 'The report has 1 new photo from this device that is not in JobTread yet.\n\nUpload it to ' + jn(state.job) + ' now?'
+                                     : 'The report has ' + pending.length + ' new photos from this device that are not in JobTread yet.\n\nUpload them to ' + jn(state.job) + ' now?';
       if (confirm(msg)) {
         uploadLocalPhotos(pending).then(function () { overlay(false); buildPdf(); })
           .catch(function (e) { overlay(false); handleError(e); renderLibrary(); renderSections(); changed(); });
@@ -981,7 +983,7 @@ function renderEditor() {
       return loadLogo();
     }).then(function (logo) {
       var data = {
-        title: state.report.title, project: state.job.name, author: state.report.author,
+        title: state.report.title, project: jn(state.job), author: state.report.author,
         company: CFG.COMPANY, dateText: state.report.dateText, logo: logo,
         sections: state.sections.map(function (s) {
           return {
@@ -1011,7 +1013,7 @@ function renderEditor() {
     var mb = (p.blob.size / 1048576).toFixed(1);
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="backToEditor">&larr; Back to edit</button>' +
-      '<div class="grow"><div class="title">' + esc(state.job.name) + '</div></div>' +
+      '<div class="grow"><div class="title">' + esc(jn(state.job)) + '</div></div>' +
       settingsMenu() + '</header>' +
       '<main class="page result"><div class="card">' +
       '<h1>Your report is ready</h1>' +
@@ -1055,7 +1057,7 @@ function renderEditor() {
     }).then(function (r) {
       overlay(false); state.saved = true;
       var b = $('#saveBtn'); if (b) { b.disabled = true; b.textContent = 'Saved to JobTread'; }
-      setMsg('Saved in JobTread: ' + state.job.name + ' > Files > ' + (r.folder || 'Reports') + ' > ' + r.name, true);
+      setMsg('Saved in JobTread: ' + jn(state.job) + ' > Files > ' + (r.folder || 'Reports') + ' > ' + r.name, true);
     }).catch(function (e) { overlay(false); handleError(e, $('#msg')); });
   }
 
@@ -1148,7 +1150,7 @@ function renderEditor() {
     var up = state.up;
     if (up.job) {
       box.innerHTML = '<div class="uptitle"><span class="stepnum">1</span>Job</div>' +
-        '<div class="jobchip"><span class="nm">' + esc(up.job.name || 'Job') + '</span>' +
+        '<div class="jobchip"><span class="nm">' + esc(jn(up.job) || 'Job') + '</span>' +
         (up.busy ? '' : '<button class="link" data-act="upChangeJob">Change</button>') + '</div>';
       return;
     }
@@ -1164,13 +1166,13 @@ function renderEditor() {
     var html = '';
     if (!searching && state.myJobs.length) {
       html += '<div class="small muted">My jobs</div>' + state.myJobs.map(function (j) {
-        return '<div class="jobrow"><button class="job" data-act="upPickJob" data-id="' + esc(j.id) + '"><span class="name">' + esc(j.name) + '</span></button>' + starBtn(j) + '</div>';
+        return '<div class="jobrow"><button class="job" data-act="upPickJob" data-id="' + esc(j.id) + '"><span class="name">' + esc(jn(j)) + '</span></button>' + starBtn(j) + '</div>';
       }).join('');
     }
     if (!searching) html += up.recent ? '<div class="small muted sheet-sub">Open jobs, newest first. Or type to search.</div>' : '<p class="muted">Loading jobs...</p>';
     else if (!list.length) html += '<p class="muted">No jobs found. Try fewer words or just the house number.</p>';
     html += list.map(function (j) {
-      return '<div class="jobrow"><button class="job" data-act="upPickJob" data-id="' + esc(j.id) + '"><span class="name">' + esc(j.name) +
+      return '<div class="jobrow"><button class="job" data-act="upPickJob" data-id="' + esc(j.id) + '"><span class="name">' + esc(jn(j)) +
         '<div class="sub">Created ' + esc(fmtShort(j.createdAt)) + '</div></span></button>' + starBtn(j) + '</div>';
     }).join('');
     box.innerHTML = html;
@@ -1337,7 +1339,7 @@ function renderEditor() {
       status = 'Preparing photos...'; buttons = '<button class="btn primary" disabled>Upload</button>';
     } else if (done) {
       var where = {}; items.forEach(function (i) { if (i.status === 'done') where[folderLabel(i.saved || folderOf(i))] = true; });
-      status = '✓ ' + done + ' saved to JobTread: ' + (up.job ? up.job.name : '') + ' > Files > ' + Object.keys(where).join(', ');
+      status = '✓ ' + done + ' saved to JobTread: ' + (up.job ? jn(up.job) : '') + ' > Files > ' + Object.keys(where).join(', ');
       buttons = (can('report') ? '<button class="btn" data-act="upReport">Make a report from this job</button>' : '') + '<button class="btn primary" data-act="upMore">Upload more</button>';
     } else {
       status = 'Add photos above.'; buttons = '<button class="btn primary" disabled>Upload</button>';
@@ -1581,7 +1583,7 @@ function renderEditor() {
     }
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="filesBack">&larr; Back</button>' +
-      '<div class="grow"><div class="title">' + esc(j.name) + '</div><div class="small muted">Files and plans</div></div>' + starBtn(j) +
+      '<div class="grow"><div class="title">' + esc(jn(j)) + '</div><div class="small muted">Files and plans</div></div>' + starBtn(j) +
       settingsMenu() + '</header>' +
       '<main class="page files"><div class="fstrip">' +
       (can('photos') || can('report') ? '<button class="ftile" data-act="filesPhotos"><b>&#128247; Photos</b><span>See the job photos, by date or by tag</span></button>' : '') +
@@ -1622,7 +1624,7 @@ function renderEditor() {
       tasks.forEach(function (t) { var k = t.jobId || ''; if (!byJob[k]) { byJob[k] = { name: t.jobName || 'No job', id: t.jobId, open: [], done: [] }; order.push(k); } byJob[k][t.done ? 'done' : 'open'].push(t); });
       body = order.map(function (k) {
         var g = byJob[k];
-        return '<section class="tgroup"><h2>' + esc(g.name) + (g.id ? ' <button class="link small" data-act="taskJob" data-id="' + esc(g.id) + '" data-name="' + esc(g.name) + '">Open job</button>' : '') + '</h2>' +
+        return '<section class="tgroup"><h2>' + esc(jn(g)) + (g.id ? ' <button class="link small" data-act="taskJob" data-id="' + esc(g.id) + '" data-name="' + esc(g.name) + '">Open job</button>' : '') + '</h2>' +
           g.open.map(taskHtml).join('') + (g.done.length ? '<details class="tdone"><summary>' + g.done.length + ' completed</summary>' + g.done.map(taskHtml).join('') + '</details>' : '') + '</section>';
       }).join('');
     }
@@ -1742,7 +1744,7 @@ function renderEditor() {
     }).join(''); }).join('');
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="galleryBack">&larr; Back</button>' +
-      '<div class="grow"><div class="title">' + esc(g.job.name) + '</div><div class="small muted">' + files.length + ' photos</div></div>' + starBtn(g.job) +
+      '<div class="grow"><div class="title">' + esc(jn(g.job)) + '</div><div class="small muted">' + files.length + ' photos</div></div>' + starBtn(g.job) +
       groupSwitch('groupGal') + (can('upload') && canWrite() ? '<button class="btn small" data-act="galleryUpload">&#8679; Upload photos</button>' : '') +
       (can('report') ? '<button class="btn small primary" data-act="galleryReport">Make a report</button>' : '') + settingsMenu() + '</header>' +
       '<main class="page gallery">' + (files.length ? '<div class="lib gal">' + grid + '</div>' : '<p class="muted">No photos in this job yet.</p>') + '</main>';
@@ -1781,7 +1783,7 @@ function renderEditor() {
     }
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="todosBack">&larr; Back</button>' +
-      '<div class="grow"><div class="title">' + esc(td.job.name) + '</div><div class="small muted">To-do list</div></div>' + starBtn(td.job) + settingsMenu() + '</header>' +
+      '<div class="grow"><div class="title">' + esc(jn(td.job)) + '</div><div class="small muted">To-do list</div></div>' + starBtn(td.job) + settingsMenu() + '</header>' +
       '<main class="page tasks">' + (td.blocked ? '<section class="tgroup"><p class="msg">To-do list is not available: ' + esc(td.failed) + '</p></section>' : !canWrite() ? '<section class="tgroup"><p class="small msg">' + esc(writeWhy()) + ' You can view the list.</p></section>' : '<section class="tgroup' + (td.add || td.added ? '' : ' bare') + '">' +
       (td.added ? '<div class="added"><b>&#10003; Added to JobTread:</b> ' + esc(td.added) + '<div class="row2"><button class="btn primary" data-act="todoShowAdd">Add another to-do</button><button class="btn" data-act="todosBack">Done</button></div></div>' :
       '<button class="btn primary" data-act="todoShowAdd" id="todoShowAdd"' + (td.add ? ' hidden' : '') + '>+ Add a to-do</button>' +

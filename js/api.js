@@ -21,11 +21,26 @@
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (!data.ok) throw Object.assign(new Error(data.message || data.error || 'Request failed'), { code: data.error || 'server' });
+        if (Array.isArray(data.jobs)) rememberLong(data.jobs);
         return data;
       });
   }
 
+  // JobTread "Project Long Name" for each job id the server has told us about, kept on this device so names show at once.
+  var LONG_KEY = 'hci_pr_longnames', longMap = {};
+  try { longMap = JSON.parse(localStorage.getItem(LONG_KEY) || '{}') || {}; } catch (e) { longMap = {}; }
+  function rememberLong(jobs) {
+    var changed = false;
+    jobs.forEach(function (j) {
+      if (!j || !j.id || j.longName === undefined) return;
+      var v = String(j.longName || '');
+      if (longMap[j.id] !== v) { if (v) longMap[j.id] = v; else delete longMap[j.id]; changed = true; }
+    });
+    if (changed) { try { localStorage.setItem(LONG_KEY, JSON.stringify(longMap)); } catch (e) { /* full */ } }
+  }
+
   window.API = {
+    longName: function (id) { return longMap[id] || ''; },
     call: call,
     saveSession: function (token, user) { localStorage.setItem(TOKEN_KEY, token); localStorage.setItem(USER_KEY, JSON.stringify(user)); },
     clearSession: function () { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); localStorage.removeItem('hci_pr_access'); },
