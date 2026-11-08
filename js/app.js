@@ -10,6 +10,19 @@
   var app = $('#app');
 
   // A job's display name: its JobTread "Project Long Name" when it has one, else the job name.
+  // Opening or refreshing the app reads each list straight from JobTread once (not the copy the server saved).
+  var freshLeft = { my: true, active: true, wo: true };
+  function takeFresh(k) { var f = !!freshLeft[k]; freshLeft[k] = false; return f; }
+  // Coming back to the app after a minute or more away (phone tab left open) does the same.
+  var hiddenAt = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 60000 && state.view === 'search' && state.user) {
+      freshLeft = { my: true, active: true, wo: true };
+      try { syncMyJobs(); loadActiveJobs(true); loadWoJobs(true); } catch (e) { /* home not shown */ }
+    }
+    hiddenAt = 0;
+  });
   function jn(j) { return (j && (API.longName(j.id) || j.longName)) || (j && j.name) || ''; }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -357,7 +370,7 @@
   // Merge the server's list with this device's copy. Nothing is ever dropped by an upgrade or a sign-in on another
   // device: a job on either side stays, and the merged list is written back if the server was missing any.
   function syncMyJobs() {
-    API.call('getMyJobs').then(function (r) {
+    API.call('getMyJobs', { fresh: takeFresh('my') }).then(function (r) {
       var server = r.jobs || [], seen = {}, merged = [];
       server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '', longName: jn(j) !== j.name ? jn(j) : '' }); } });
       state.myJobs = sortMyJobs(merged); cacheMyJobs(); paintStars();
@@ -469,7 +482,7 @@
   var activeAt = 0;
   function loadActiveJobs(force) {
     if (!force && state.active && Date.now() - activeAt < 120000) return;
-    API.call('phaseJobs').then(function (r) { state.active = r.jobs || []; activeAt = Date.now(); renderActiveJobs(); renderMyJobs(); })
+    API.call('phaseJobs', { fresh: force || takeFresh('active') }).then(function (r) { state.active = r.jobs || []; activeAt = Date.now(); renderActiveJobs(); renderMyJobs(); })
       .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.active = state.active || []; state.activeFailed = true; renderActiveJobs(); });
   }
   // Work orders have their own list, so they are left out of Active jobs.
@@ -487,7 +500,7 @@
   var woAt = 0;
   function loadWoJobs(force) {
     if (!force && state.wo && Date.now() - woAt < 120000) return;
-    API.call('woJobs').then(function (r) { state.wo = r.jobs || []; if (r.statusOptions) state.statusOptions = r.statusOptions; woAt = Date.now(); state.woFailed = false; renderWoJobs(); renderActiveJobs(); renderMyJobs(); })
+    API.call('woJobs', { fresh: force || takeFresh('wo') }).then(function (r) { state.wo = r.jobs || []; if (r.statusOptions) state.statusOptions = r.statusOptions; woAt = Date.now(); state.woFailed = false; renderWoJobs(); renderActiveJobs(); renderMyJobs(); })
       .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.wo = state.wo || []; state.woFailed = true; renderWoJobs(); });
   }
   function renderWoJobs() {
