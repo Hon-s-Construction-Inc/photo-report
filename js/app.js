@@ -173,8 +173,8 @@
       '<div class="selbox" id="selbox"></div><div id="notebox"></div>' +
       '<div class="cols"><section class="col"><div class="lab labrow">My jobsite</div>' + listTools('my') + '<div id="myJobs"></div></section>' +
       '<section class="col act"><div class="lab labrow">Action</div><div class="ltools stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + '</div>' + listTools('active') + '<div id="activeJobs"></div></section>' +
-      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + '</div>' + listTools('wo') + '<div id="woJobs"></div></section>' +
+      '<section class="col active"><div class="lab labrow">Non Green Tree WO jobs <b class="cnt" id="activeCnt"></b>' + '</div>' + listTools('active') + '<div id="activeJobs"></div></section>' +
+      '<section class="col wo"><div class="lab labrow">Green Tree Work orders <b class="cnt" id="woCnt"></b>' + '</div>' + listTools('wo') + '<div id="woJobs"></div></section>' +
       '<section class="col tmp" id="tempCol" hidden><div class="lab labrow">Temporary jobs <b class="cnt" id="tempCnt"></b> <span class="small muted">&middot; new customers, not in JobTread yet</span></div><div id="tempJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs(); loadTemps();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
@@ -1861,7 +1861,7 @@ function renderEditor() {
   ];
   var PERM_WORDS = {
     todo: 'See, add and tick off to-dos', files: 'See plans and job files', costFiles: 'Also see cost folders (invoices, subs, pay apps)',
-    photos: 'See job photos', upload: 'Upload photos and files', report: 'Make photo reports (PDF)', saveJT: 'Save the report PDF into JobTread', tasks: 'My tasks', status: 'Change a job\'s Status (Active jobs and Work orders)', newJob: 'Start a new (temporary) job from Find job'
+    photos: 'See job photos', upload: 'Upload photos and files', report: 'Make photo reports (PDF)', saveJT: 'Save the report PDF into JobTread', tasks: 'My tasks', status: 'Change a job\'s Status (job lists on home)', newJob: 'Start a new (temporary) job from Find job'
   };
   function permGroups(defs, one) {
     var seen = {};
@@ -1907,7 +1907,7 @@ function renderEditor() {
           return '<label class="perm"><input type="checkbox" class="featchk" data-perm="' + esc(d.key) + '"' + (feats[d.key] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + '</span></label>';
         }) +
         '<div class="row2 presets"><span class="small muted">Quick set:</span><button class="btn small" data-act="featPreset" data-preset="report">Photo report only</button><button class="btn small" data-act="featPreset" data-preset="all">Everything on</button></div></details>' +
-        ((a.phaseOptions || []).length ? '<details class="user feats phases" data-key="phases"' + isOpen('phases') + '><summary class="uhead"><b>Active jobs list for everyone</b><span class="small muted">Open jobs whose JobTread Status is ticked here show under Active jobs on everyone\'s home screen.</span></summary>' +
+        ((a.phaseOptions || []).length ? '<details class="user feats phases" data-key="phases"' + isOpen('phases') + '><summary class="uhead"><b>Non Green Tree WO jobs list for everyone</b><span class="small muted">Open jobs whose JobTread Status is ticked here show under Non Green Tree WO jobs on everyone\'s home screen.</span></summary>' +
           '<div class="perms">' + (a.phaseOptions || []).map(function (ph) {
             var isNew = (a.phasesNew || []).indexOf(ph) > -1;
             return '<label class="perm"><input type="checkbox" class="phasechk" value="' + esc(ph) + '"' + ((a.phases || []).indexOf(ph) > -1 ? ' checked' : '') + '><span>' + esc(ph) + (isNew ? ' <b class="newtag">NEW in JobTread</b>' : '') + '</span></label>';
@@ -2541,7 +2541,7 @@ function renderEditor() {
       var ph = $$('.phasechk').filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
       $$('.phasechk').forEach(function (c) { c.disabled = true; });
       return API.call('setPhases', { phases: ph }).then(function (r) {
-        state.admin.phases = r.phases; state.active = null; toast('Active jobs list updated.'); $$('.phasechk').forEach(function (c) { c.disabled = false; });
+        state.admin.phases = r.phases; state.active = null; toast('Non Green Tree WO jobs list updated.'); $$('.phasechk').forEach(function (c) { c.disabled = false; });
       }).catch(function (e) { t.checked = !t.checked; $$('.phasechk').forEach(function (c) { c.disabled = false; }); handleError(e); });
     }
     if (t.classList && t.classList.contains('featchk')) {
