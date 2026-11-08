@@ -1706,8 +1706,11 @@ function renderEditor() {
         '<div class="row2 presets"><span class="small muted">Quick set:</span><button class="btn small" data-act="featPreset" data-preset="report">Photo report only</button><button class="btn small" data-act="featPreset" data-preset="all">Everything on</button></div></section>' +
         ((a.phaseOptions || []).length ? '<section class="user feats phases"><div class="uhead"><b>Active jobs list for everyone</b><span class="small muted">Open jobs whose JobTread Status is ticked here show under Active jobs on everyone\'s home screen.</span></div>' +
           '<div class="perms">' + (a.phaseOptions || []).map(function (ph) {
-            return '<label class="perm"><input type="checkbox" class="phasechk" value="' + esc(ph) + '"' + ((a.phases || []).indexOf(ph) > -1 ? ' checked' : '') + '><span>' + esc(ph) + '</span></label>';
-          }).join('') + '</div></section>' : '') +
+            var isNew = (a.phasesNew || []).indexOf(ph) > -1;
+            return '<label class="perm"><input type="checkbox" class="phasechk" value="' + esc(ph) + '"' + ((a.phases || []).indexOf(ph) > -1 ? ' checked' : '') + '><span>' + esc(ph) + (isNew ? ' <b class="newtag">NEW in JobTread</b>' : '') + '</span></label>';
+          }).join('') + '</div>' +
+          ((a.phasesGone || []).length ? '<p class="small warn-txt">No longer in JobTread (renamed or removed there), so not used: ' + a.phasesGone.map(esc).join(', ') + '. Tick the new name above if it was renamed.</p>' : '') +
+          '<p class="small muted">Status choices are read from JobTread each time this screen opens.</p></section>' : '') +
         '<div class="lab">Per person</div><div class="users">' + a.users.map(function (u) {
         return '<div class="user' + (u.isAdmin ? ' adm' : '') + '"><div class="uhead"><b>' + esc(titleCase(u.name)) + '</b><span class="small muted">' + esc(u.email) + '</span>' +
           '<span class="badge' + (u.isAdmin ? ' has' : '') + '">' + esc(u.role) + '</span>' +
