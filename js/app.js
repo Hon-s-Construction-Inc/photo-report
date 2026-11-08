@@ -66,7 +66,7 @@
   };
   // What this person may do here (set by an Admin). Until the server answers, everything shows.
   function can(k) { return !state.perms || state.perms[k] !== false; }
-  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; API.saveAccess(r); } if (r && r.write) state.write = r.write; }
+  function takePerms(r) { if (r && r.perms) { state.perms = r.perms; state.isAdmin = !!r.isAdmin; state.statusAllowed = r.statusAllowed || null; API.saveAccess(r); } if (r && r.write) state.write = r.write; }
   // Can this person save to JobTread right now? Unknown until the server says; then every write control follows it.
   function canWrite() { return !state.write || state.write.ok !== false; }
   function writeWhy() { return (state.write && state.write.message) || 'Saving to JobTread is not available for you yet.'; }
@@ -167,10 +167,10 @@
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div>' +
-      '<div class="cols"><section class="col"><div class="lab">My jobsite</div><div id="myJobs"></div></section>' +
-      '<section class="col act"><div class="lab">Action</div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab">Active jobs <b class="cnt" id="activeCnt"></b> <span class="small muted">&middot; tap + to add to My jobsite</span></div><div id="activeJobs"></div></section>' +
-      '<section class="col wo"><div class="lab">Work orders <b class="cnt" id="woCnt"></b> <span class="small muted">&middot; open</span></div><div id="woJobs"></div></section></div></main>';
+      '<div class="cols"><section class="col"><div class="lab labrow">My jobsite' + listSearch('my') + '</div><div id="myJobs"></div></section>' +
+      '<section class="col act"><div class="lab labrow">Action</div><div id="actionBox"></div></section>' +
+      '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + listSearch('active') + '</div><div id="activeJobs"></div></section>' +
+      '<section class="col wo"><div class="lab labrow">Work orders <b class="cnt" id="woCnt"></b>' + listSearch('wo') + '</div><div id="woJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
@@ -315,10 +315,27 @@
     renderMyJobs(); renderActions(); renderActiveJobs(); renderWoJobs();
     if (state.view === 'upload' && state.up && !state.up.job) paintJobResults();
   }
+  // A search box on each home list that only narrows that list (nothing is sent to the server).
+  function listSearch(k) {
+    var v = (state.listQ && state.listQ[k]) || '';
+    return '<input type="search" class="listq" data-list="' + k + '" placeholder="Search this list" aria-label="Search this list" autocomplete="off" value="' + esc(v) + '">';
+  }
+  function listFilter(k, list) {
+    var q = String((state.listQ && state.listQ[k]) || '').toLowerCase().trim();
+    if (!q || !list) return list;
+    var words = q.split(/\s+/);
+    return list.filter(function (j) {
+      var hay = (jn(j) + ' ' + (j.name || '') + ' ' + (j.phase || '')).toLowerCase();
+      return words.every(function (w) { return hay.indexOf(w) > -1; });
+    });
+  }
+  function noMatch(k) { return '<p class="small muted">No job in this list matches "' + esc(state.listQ[k]) + '".</p>'; }
   function renderMyJobs() {
     var box = $('#myJobs'); if (!box) return;
     if (!state.myJobs.length) { box.innerHTML = '<p class="small muted">No jobs marked yet.</p>'; return; }
-    box.innerHTML = '<div class="results">' + state.myJobs.map(function (j) {
+    var shown = listFilter('my', state.myJobs);
+    if (!shown.length) { box.innerHTML = noMatch('my'); return; }
+    box.innerHTML = '<div class="results">' + shown.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       var x = '<button class="star unstar" data-act="unstar" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-label="Remove from My jobsite" title="Remove from My jobsite">&times;</button>';
       return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + '</span></button></div>';
@@ -340,7 +357,8 @@
     setCount('#activeCnt', state.activeFailed ? null : list);
     if (!list) { box.innerHTML = '<p class="small muted">Loading jobs...</p>'; return; }
     if (!list.length) { box.innerHTML = '<p class="small muted">' + (state.activeFailed ? 'Could not load the job list.' : 'No jobs in the chosen phases.') + '</p>'; return; }
-    box.innerHTML = jobListHtml(list);
+    var shown = listFilter('active', list);
+    box.innerHTML = shown.length ? jobListHtml(shown) : noMatch('active');
   }
   var woAt = 0;
   function loadWoJobs(force) {
@@ -353,7 +371,8 @@
     setCount('#woCnt', state.woFailed ? null : state.wo);
     if (!state.wo) { box.innerHTML = '<p class="small muted">Loading work orders...</p>'; return; }
     if (!state.wo.length) { box.innerHTML = '<p class="small muted">' + (state.woFailed ? 'Could not load the work orders. If this stays, the latest Code.gs is not deployed yet.' : 'No open work orders.') + '</p>'; return; }
-    box.innerHTML = jobListHtml(state.wo, { byStatus: true });
+    var shown = listFilter('wo', state.wo);
+    box.innerHTML = shown.length ? jobListHtml(shown, { byStatus: true }) : noMatch('wo');
   }
   function setCount(sel, list) { var el = $(sel); if (el) el.textContent = list ? '(' + list.length + ')' : ''; }
   // Who may change a job's Status here: the "status" switch (Admin screen) and a working JobTread key.
@@ -370,11 +389,14 @@
     var edit = canStatus();
     return '<div class="results">' + ((opts && opts.byStatus) ? byStatus(list) : sortMyJobs(list)).map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
-      var st = edit ? '<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Status of ' + esc(jn(j)) + '">' +
-          state.statusOptions.map(function (o) { return '<option' + (o === j.phase ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
-          (state.statusOptions.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select>' : '';
-      return '<div class="jobrow' + (edit ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-        '<span class="name">' + esc(jn(j)) + '</span>' + (edit ? '' : '<span class="phase">' + esc(j.phase || '') + '</span>') + '</button>' + st + '</div></div>';
+      // Only the Statuses an Admin allowed this person; a job outside them shows its Status without a picker.
+      var allow = state.statusAllowed, mine = edit && (!allow || allow.indexOf(j.phase) > -1);
+      var opts = mine ? state.statusOptions.filter(function (o) { return !allow || allow.indexOf(o) > -1; }) : [];
+      var st = mine ? '<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Status of ' + esc(jn(j)) + '">' +
+          opts.map(function (o) { return '<option' + (o === j.phase ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+          (opts.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select>' : '';
+      return '<div class="jobrow' + (mine ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
+        '<span class="name">' + esc(jn(j)) + '</span>' + (mine ? '' : '<span class="phase">' + esc(j.phase || '') + '</span>') + '</button>' + st + '</div></div>';
     }).join('') + '</div>';
   }
   function changeStatus(sel) {
@@ -1717,6 +1739,25 @@ function renderEditor() {
     var rest = defs.filter(function (d) { return !seen[d.key]; });
     return html + (rest.length ? '<div class="pgroup"><div class="pgt">Other</div><div class="perms">' + rest.map(one).join('') + '</div></div>' : '');
   }
+  // Per person: which Status values they may set. All ticked = no limit.
+  function statusAllowHtml(u, a) {
+    var opts = a.phaseOptions || [];
+    if (!opts.length) return '';
+    var allow = u.statuses;
+    return '<div class="stallow"><div class="grp">May change jobs to and from these Statuses <span class="small muted">(needs the Status switch above)</span></div><div class="perms">' +
+      opts.map(function (o) {
+        return '<label class="perm"><input type="checkbox" class="stchk" data-email="' + esc(u.email) + '" value="' + esc(o) + '"' + (!allow || allow.indexOf(o) > -1 ? ' checked' : '') + '><span>' + esc(o) + '</span></label>';
+      }).join('') + '</div><div class="row2"><button class="btn small" data-act="stAll" data-email="' + esc(u.email) + '" data-on="1">All</button><button class="btn small" data-act="stAll" data-email="' + esc(u.email) + '" data-on="0">None</button></div></div>';
+  }
+  function saveStatuses(email) {
+    var boxes = $$('.stchk').filter(function (c) { return c.dataset.email === email; });
+    var list = boxes.filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
+    boxes.forEach(function (c) { c.disabled = true; });
+    API.call('setStatuses', { email: email, statuses: list }).then(function () {
+      boxes.forEach(function (c) { c.disabled = false; });
+      toast(list.length === boxes.length ? 'All Statuses allowed.' : list.length ? list.length + ' Statuses allowed.' : 'No Status changes allowed.');
+    }).catch(function (e) { boxes.forEach(function (c) { c.disabled = false; }); handleError(e); });
+  }
   function permLabel(d) { return PERM_WORDS[d.key] || d.label || d.key; }
 
   function renderAdmin() {
@@ -1751,7 +1792,7 @@ function renderEditor() {
               var k = d.key;
               var off = a.features && a.features[k] === false;
               return '<label class="perm' + (off ? ' gated' : '') + '" title="' + (off ? 'Switched off for everyone above' : '') + '"><input type="checkbox" class="permchk" data-email="' + esc(u.email) + '" data-perm="' + esc(k) + '"' + (u.perms[k] ? ' checked' : '') + '><span>' + esc(permLabel(d)) + (off ? ' <i>(off for everyone)</i>' : '') + '</span></label>';
-            })) + '</details>';
+            }) + statusAllowHtml(u, a)) + '</details>';
       }).join('') + '</div>';
     }
     app.innerHTML =
@@ -1942,6 +1983,11 @@ function renderEditor() {
       case 'taskNote': el.closest('.task').classList.toggle('open'); return;
       case 'taskJob': return can('report') ? pullJob({ id: el.dataset.id, name: el.dataset.name }) : openFiles({ id: el.dataset.id, name: el.dataset.name }, 'search');
       case 'admin': return openAdmin();
+      case 'stAll': {
+        var on = el.dataset.on === '1';
+        $$('.stchk').forEach(function (c) { if (c.dataset.email === el.dataset.email) c.checked = on; });
+        return saveStatuses(el.dataset.email);
+      }
       case 'adminExpand': {
         var openAll = el.dataset.open === '1';
         $$('.users details.user').forEach(function (d) { d.open = openAll; state.adminOpen[d.dataset.key] = openAll; });
@@ -2012,6 +2058,10 @@ function renderEditor() {
     var t = ev.target;
     if (t.id === 'q') return onSearchInput(t.value);
     if (t.id === 'upq') return onUpSearch(t.value);
+    if (t.classList.contains('listq')) {
+      (state.listQ = state.listQ || {})[t.dataset.list] = t.value;
+      return ({ my: renderMyJobs, active: renderActiveJobs, wo: renderWoJobs })[t.dataset.list]();
+    }
     if (t.classList.contains('upnote')) { var ui = upItem(t.dataset.uid); if (ui) ui.note = t.value; return; }
     if (t.id === 'repTitle') { state.report.title = t.value; return saveDraft(); }
     if (t.id === 'repAuthor') { state.report.author = t.value; return saveDraft(); }
@@ -2045,6 +2095,7 @@ function renderEditor() {
       return setPerm(t.dataset.email, t.dataset.perm, t.checked, t);
     }
     if (t.classList && t.classList.contains('stsel')) return changeStatus(t);
+    if (t.classList && t.classList.contains('stchk')) return saveStatuses(t.dataset.email);
     if (t.classList && t.classList.contains('phasechk')) {
       var ph = $$('.phasechk').filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
       $$('.phasechk').forEach(function (c) { c.disabled = true; });
@@ -2088,12 +2139,12 @@ function renderEditor() {
     // Open straight away with what this device knew last time; the server check runs in the background
     // and the screen is redrawn only if something changed (new switches, signed out, etc.).
     var saved = API.savedUser(), acc = API.savedAccess(), quick = !!(saved && acc && acc.perms);
-    if (quick) { state.user = saved; state.perms = acc.perms; state.isAdmin = !!acc.isAdmin; state.write = acc.write || null; afterSignIn(); }
+    if (quick) { state.user = saved; state.perms = acc.perms; state.isAdmin = !!acc.isAdmin; state.write = acc.write || null; state.statusAllowed = acc.statusAllowed || null; afterSignIn(); }
     API.call('me').then(function (r) {
-      var before = JSON.stringify([state.perms, state.isAdmin, state.write]);
+      var before = JSON.stringify([state.perms, state.isAdmin, state.write, state.statusAllowed]);
       state.user = r.user; takePerms(r);
       if (!quick) return afterSignIn();
-      if (JSON.stringify([state.perms, state.isAdmin, state.write]) !== before) render();
+      if (JSON.stringify([state.perms, state.isAdmin, state.write, state.statusAllowed]) !== before) render();
     }).catch(function (e) {
         if (e && e.code === 'auth') { API.clearSession(); return go('login'); }
         if (!quick) { state.user = API.savedUser(); go(state.user ? 'search' : 'login'); }
