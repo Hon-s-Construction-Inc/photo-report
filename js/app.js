@@ -265,12 +265,25 @@
     var m = /^\s*(\d+)\s*(.*)$/.exec(String(name || ''));
     return { n: m ? Number(m[1]) : Infinity, s: (m ? m[2] : String(name || '')).toLowerCase() };
   }
-  function sortMyJobs(list) {
+  // Job list order: house number ascending. Jobs whose Status is Complete or Complete Pending Final Payment go to the
+  // bottom. In Work orders, A New Lead jobs come first. A job's Status is looked up from the Active and Work order lists.
+  function phaseOf(j) {
+    if (j.phase) return j.phase;
+    var hit = (state.wo || []).concat(state.active || []).filter(function (x) { return x.id === j.id; })[0];
+    return hit ? hit.phase : '';
+  }
+  function sortJobs(list, newLeadsFirst) {
+    var rank = function (j) {
+      var p = phaseOf(j);
+      if (/^complete/i.test(p)) return 2;
+      return newLeadsFirst && /new lead/i.test(p) ? 0 : 1;
+    };
     return list.slice().sort(function (a, b) {
       var ka = jobSortKey(a.name), kb = jobSortKey(b.name);
-      return ka.n - kb.n || ka.s.localeCompare(kb.s);
+      return rank(a) - rank(b) || ka.n - kb.n || ka.s.localeCompare(kb.s);
     });
   }
+  function sortMyJobs(list) { return sortJobs(list, false); }
   function isMyJob(id) { return !!myJob(id); }
   // Add / in-list control. "+" adds the job to My jobsite; once it is there the control shows a tick and tapping it
   // asks before removing. full=true writes the words out (used on the Working on line).
@@ -333,7 +346,7 @@
   function renderMyJobs() {
     var box = $('#myJobs'); if (!box) return;
     if (!state.myJobs.length) { box.innerHTML = '<p class="small muted">No jobs marked yet.</p>'; return; }
-    var shown = listFilter('my', state.myJobs);
+    var shown = sortMyJobs(listFilter('my', state.myJobs));
     if (!shown.length) { box.innerHTML = noMatch('my'); return; }
     box.innerHTML = '<div class="results">' + shown.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
@@ -346,7 +359,7 @@
   var activeAt = 0;
   function loadActiveJobs(force) {
     if (!force && state.active && Date.now() - activeAt < 120000) return;
-    API.call('phaseJobs').then(function (r) { state.active = r.jobs || []; activeAt = Date.now(); renderActiveJobs(); })
+    API.call('phaseJobs').then(function (r) { state.active = r.jobs || []; activeAt = Date.now(); renderActiveJobs(); renderMyJobs(); })
       .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.active = state.active || []; state.activeFailed = true; renderActiveJobs(); });
   }
   // Work orders have their own list, so they are left out of Active jobs.
@@ -363,7 +376,7 @@
   var woAt = 0;
   function loadWoJobs(force) {
     if (!force && state.wo && Date.now() - woAt < 120000) return;
-    API.call('woJobs').then(function (r) { state.wo = r.jobs || []; if (r.statusOptions) state.statusOptions = r.statusOptions; woAt = Date.now(); state.woFailed = false; renderWoJobs(); renderActiveJobs(); })
+    API.call('woJobs').then(function (r) { state.wo = r.jobs || []; if (r.statusOptions) state.statusOptions = r.statusOptions; woAt = Date.now(); state.woFailed = false; renderWoJobs(); renderActiveJobs(); renderMyJobs(); })
       .catch(function (e) { if (e && e.code === 'auth') return handleError(e); state.wo = state.wo || []; state.woFailed = true; renderWoJobs(); });
   }
   function renderWoJobs() {
@@ -378,13 +391,7 @@
   // Who may change a job's Status here: the "status" switch (Admin screen) and a working JobTread key.
   function canStatus() { return !!(state.perms && state.perms.status === true && canWrite() && (state.statusOptions || []).length); }
   // Order by JobTread's Status order (A New Lead first), then by address.
-  function byStatus(list) {
-    var opts = state.statusOptions || [];
-    return sortMyJobs(list).sort(function (a, b) {
-      var ia = opts.indexOf(a.phase), ib = opts.indexOf(b.phase);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-    });
-  }
+  function byStatus(list) { return sortJobs(list, true); }
   function jobListHtml(list, opts) {
     var edit = canStatus();
     return '<div class="results">' + ((opts && opts.byStatus) ? byStatus(list) : sortMyJobs(list)).map(function (j) {
