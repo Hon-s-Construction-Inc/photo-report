@@ -595,3 +595,11 @@ details.user .ucount { margin-left: auto; }
 .home .stchip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border-radius: 999px; background: #eef4ff; border: 1px solid #c7d7fe; color: #1849a9; font-size: 13px; font-weight: 600; }
 .home .stchip button { border: 0; background: none; color: #1849a9; font-size: 16px; line-height: 1; width: 28px; height: 28px; border-radius: 999px; cursor: pointer; }
 .home .stchip button:hover { background: #d1e0ff; }
+/* Private notes on the job being worked on (this device only) */
+.selname .notebtn { flex: none; font-size: 14px; font-weight: 600; }
+.selname .notebtn.has { background: #fffaeb; border-color: #fedf89; color: #b54708; }
+.home .notecard { margin: -6px 0 16px; padding: 10px; background: #fffaeb; border: 1px solid #fedf89; border-radius: var(--radius); }
+.home .notecard textarea { background: #fff; font-size: 15px; min-height: 110px; }
+.home .notefoot { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.home .notefoot .link { margin-left: auto; color: var(--red); }
+.hasnote { font-size: 13px; margin-left: 4px; }

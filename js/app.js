@@ -166,7 +166,7 @@
       '<main class="home">' +
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
-      '<div class="selbox" id="selbox"></div>' +
+      '<div class="selbox" id="selbox"></div><div id="notebox"></div>' +
       '<div class="cols"><section class="col"><div class="lab labrow">My jobsite</div>' + listTools('my') + '<div id="myJobs"></div></section>' +
       '<section class="col act"><div class="lab labrow">Action</div><div class="ltools stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
       '<section class="col active"><div class="lab labrow">Active jobs <b class="cnt" id="activeCnt"></b>' + '</div>' + listTools('active') + '<div id="activeJobs"></div></section>' +
@@ -175,10 +175,33 @@
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
 
+  // Private notes on a job: kept only on this device, for the signed-in person. Never sent to JobTread or the server.
+  function noteKey(id) { return 'hci_pr_note_' + ((state.user && state.user.email) || '').toLowerCase() + '_' + id; }
+  function noteGet(id) { try { var n = JSON.parse(localStorage.getItem(noteKey(id)) || 'null'); return n && n.text ? n : null; } catch (e) { return null; } }
+  function noteSet(id, text) {
+    try {
+      if (String(text).trim()) localStorage.setItem(noteKey(id), JSON.stringify({ text: text, at: Date.now() }));
+      else localStorage.removeItem(noteKey(id));
+      return true;
+    } catch (e) { return false; }
+  }
+  function noteMark(j) { return noteGet(j.id) ? ' <span class="hasnote" title="You have notes on this job">&#128221;</span>' : ''; }
+  function renderNote() {
+    var box = $('#notebox'); if (!box) return;
+    var j = state.pickedJob;
+    if (!j || !state.noteOpen) { box.innerHTML = ''; return; }
+    var n = noteGet(j.id);
+    box.innerHTML = '<div class="notecard"><textarea id="noteText" rows="5" placeholder="Notes for this job: gate code, who to call, what to bring...">' + esc(n ? n.text : '') + '</textarea>' +
+      '<div class="notefoot"><span class="small muted" id="noteInfo">' + (n ? 'Saved ' + esc(fmtDateTime(new Date(n.at).toISOString())) + ' &middot; ' : '') + 'Only on this device, only for you. Not saved to JobTread.</span>' +
+      (n ? '<button class="link small" data-act="noteDelete">Delete note</button>' : '') + '</div></div>';
+  }
+
   // The right-hand half of the home screen: the selected job, then View / Upload buttons (only the ones this person may use).
   function renderActions() {
     var j = state.pickedJob, sb = $('#selbox'); if (!sb) return;
-    sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(jn(j)) + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
+    sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(jn(j)) +
+      '<button class="btn small notebtn' + (noteGet(j.id) ? ' has' : '') + '" data-act="noteToggle" aria-expanded="' + !!state.noteOpen + '">&#128221; My notes</button>' + starBtn(j, true) : 'Find a job above, or tap one under My jobsite') + '</div>';
+    renderNote();
     // The app draws its own menu (not the browser's <select>) so each row is tall enough for a gloved finger.
     var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
     // Three places, each for looking AND adding: To-do list (+ Add a to-do), Files and plans (Upload),
@@ -402,7 +425,7 @@
     box.innerHTML = '<div class="results">' + shown.map(function (j) {
       var picked = state.pickedJob && state.pickedJob.id === j.id;
       var x = '<button class="star unstar" data-act="unstar" data-id="' + esc(j.id) + '" data-name="' + esc(j.name || '') + '" aria-label="Remove from My jobsite" title="Remove from My jobsite">&times;</button>';
-      return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + '</span></button></div>';
+      return '<div class="jobrow">' + x + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '"><span class="name">' + esc(jn(j)) + noteMark(j) + '</span></button></div>';
     }).join('') + '</div>';
   }
 
@@ -457,7 +480,7 @@
           opts.map(function (o) { return '<option' + (o === j.phase ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
           (opts.indexOf(j.phase) < 0 ? '<option selected>' + esc(j.phase || '') + '</option>' : '') + '</select></span>' : '';
       return '<div class="jobrow' + (mine ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-        '<span class="name">' + esc(jn(j)) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button>' + st + '</div></div>';
+        '<span class="name">' + esc(jn(j)) + noteMark(j) + '</span><span class="phase">' + esc(j.phase || '') + '</span></button>' + st + '</div></div>';
     }).join('') + '</div>';
   }
   function changeStatus(sel) {
@@ -2044,6 +2067,10 @@ function renderEditor() {
       case 'taskNote': el.closest('.task').classList.toggle('open'); return;
       case 'taskJob': return can('report') ? pullJob({ id: el.dataset.id, name: el.dataset.name }) : openFiles({ id: el.dataset.id, name: el.dataset.name }, 'search');
       case 'admin': return openAdmin();
+      case 'noteToggle': state.noteOpen = !state.noteOpen; renderActions(); if (state.noteOpen) { var nt = $('#noteText'); if (nt) nt.focus(); } return;
+      case 'noteDelete':
+        if (state.pickedJob && confirm('Delete your notes for this job? This cannot be undone.')) { noteSet(state.pickedJob.id, ''); renderActions(); renderMyJobs(); renderActiveJobs(); renderWoJobs(); }
+        return;
       case 'stfDrop': {
         var cur = (state.listSt[el.dataset.list] || []).filter(function (s) { return s !== el.dataset.st; });
         state.listSt[el.dataset.list] = cur.length ? cur : null;
@@ -2125,6 +2152,13 @@ function renderEditor() {
     var t = ev.target;
     if (t.id === 'q') return onSearchInput(t.value);
     if (t.id === 'upq') return onUpSearch(t.value);
+    if (t.id === 'noteText' && state.pickedJob) {
+      var had = !!noteGet(state.pickedJob.id);
+      if (!noteSet(state.pickedJob.id, t.value)) { toast('Could not save the note: this device is out of space.'); return; }
+      var info = $('#noteInfo'); if (info) info.textContent = (t.value.trim() ? 'Saved just now \u00b7 ' : '') + 'Only on this device, only for you. Not saved to JobTread.';
+      if (had !== !!t.value.trim()) { var nb = $('.notebtn'); if (nb) nb.classList.toggle('has', !had); renderMyJobs(); renderActiveJobs(); renderWoJobs(); }
+      return;
+    }
     if (t.classList.contains('listq')) {
       (state.listQ = state.listQ || {})[t.dataset.list] = t.value;
       return ({ my: renderMyJobs, active: renderActiveJobs, wo: renderWoJobs })[t.dataset.list]();
