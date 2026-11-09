@@ -376,7 +376,7 @@
   function syncMyJobs() {
     API.call('getMyJobs', { fresh: takeFresh('my') }).then(function (r) {
       var server = r.jobs || [], seen = {}, merged = [];
-      server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '', longName: jn(j) !== j.name ? jn(j) : '', phase: j.phase || '' }); } });
+      server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '', longName: jn(j) !== j.name ? jn(j) : '', phase: j.phase || '', done: !!j.done }); } });
       state.myJobs = sortMyJobs(merged); cacheMyJobs(); paintStars();
       if (merged.length > server.length) API.call('setMyJobs', { jobs: state.myJobs }).catch(function () { /* next time */ });
     }).catch(function () { /* keep the cached copy */ });
@@ -469,9 +469,11 @@
   }
   function renderMyJobs() {
     var box = $('#myJobs'); if (!box) return;
-    if (!state.myJobs.length) { box.innerHTML = '<p class="small muted">No jobs marked yet.</p>'; return; }
-    statusFilter('my', state.myJobs);
-    var shown = sortMyJobs(listFilter('my', state.myJobs));
+    // Closed and Complete jobs are not shown (they stay saved, in case the job is reopened).
+    var live = state.myJobs.filter(function (j) { return !j.done; });
+    if (!live.length) { box.innerHTML = '<p class="small muted">No jobs marked yet.</p>'; return; }
+    statusFilter('my', live);
+    var shown = sortMyJobs(listFilter('my', live));
     if (!shown.length) { box.innerHTML = noMatch('my'); return; }
     var edit = canStatus();
     box.innerHTML = '<div class="results">' + shown.map(function (j) {
@@ -535,7 +537,8 @@
   function stBubble(j, edit) {
     var ph = phaseOf(j), allow = state.statusAllowed;
     if (!edit || !ph || (allow && allow.indexOf(ph) < 0)) return '';
-    var opts = state.statusOptions.filter(function (o) { return !allow || allow.indexOf(o) > -1; });
+    // Only an Admin may set a job to Complete.
+    var opts = state.statusOptions.filter(function (o) { return (!allow || allow.indexOf(o) > -1) && (o !== 'Complete' || state.isAdmin); });
     return '<span class="stbub" title="Change Status">\u25be<select class="stsel" data-id="' + esc(j.id) + '" aria-label="Change Status of ' + esc(jn(j)) + '">' +
       opts.map(function (o) { return '<option' + (o === ph ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
       (opts.indexOf(ph) < 0 ? '<option selected>' + esc(ph) + '</option>' : '') + '</select></span>';
@@ -557,7 +560,8 @@
     if (!confirm('Change the JobTread Status of\n' + jn(j) + '\n\nfrom "' + (j.phase || 'none') + '" to "' + to + '"?')) { sel.value = j.phase; return; }
     sel.disabled = true;
     API.call('setJobStatus', { jobId: id, status: to }).then(function (r) {
-      (state.wo || []).concat(state.active || [], state.jobs || [], state.myJobs || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
+      (state.wo || []).concat(state.active || [], state.jobs || [], state.myJobs || []).forEach(function (x) { if (x.id === id) { x.phase = r.status; if (r.status === 'Complete') x.done = true; } });
+      if (r.status === 'Complete') { state.jobs = (state.jobs || []).filter(function (x) { return x.id !== id; }); state.wo = (state.wo || []).filter(function (x) { return x.id !== id; }); state.active = (state.active || []).filter(function (x) { return x.id !== id; }); }
       toast('Status changed to ' + r.status + '.');
       renderResults(); renderWoJobs(); renderActiveJobs(); renderMyJobs(); loadActiveJobs(true);
     }).catch(function (e) { sel.disabled = false; sel.value = j.phase; handleError(e); });
@@ -2265,7 +2269,7 @@ function renderEditor() {
           var cur = i.values[f.id] || '';
           return '<label class="lab" for="ejf_' + esc(f.id) + '">' + esc(f.name) + '</label><select id="ejf_' + esc(f.id) + '" class="ejsel" data-fid="' + esc(f.id) + '">' +
             (cur ? '' : '<option value="" selected>(not set)</option>') +
-            f.options.map(function (o) { return '<option' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+            f.options.filter(function (o) { return f.name !== 'Status' || o !== 'Complete' || state.isAdmin || o === cur; }).map(function (o) { return '<option' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
             (cur && f.options.indexOf(cur) < 0 ? '<option selected>' + esc(cur) + '</option>' : '') + '</select>';
         }).join('') +
         '<button class="btn primary big" data-act="ejSave"' + (e.busy ? ' disabled' : '') + '>' + (e.busy ? 'Saving...' : 'Save to JobTread') + '</button>' +
