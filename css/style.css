@@ -652,3 +652,6 @@ details.user .ucount { margin-left: auto; }
 #results .jobcell .job { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; text-align: left; }
 #results .phase { font-size: 11px; color: var(--muted); font-weight: 600; }
 #results .job.picked .phase, #results .job.picked .sub { color: rgba(255,255,255,.85); }
+/* Admin: show complete / closed jobs in Find job */
+.showdone { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0 0 4px; font-size: 14px; color: var(--muted); min-height: 36px; cursor: pointer; }
+.showdone input { width: 20px; height: 20px; }

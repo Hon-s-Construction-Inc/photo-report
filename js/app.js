@@ -182,6 +182,7 @@
       (can('tasks') ? '<button class="btn small" data-act="tasks">&#9745; My tasks</button>' : '') +
       settingsMenu() + '</header>' +
       '<main class="home">' +
+      (state.isAdmin ? '<label class="showdone"><input type="checkbox" id="showDone"' + (state.showDone ? ' checked' : '') + '> Show complete / closed jobs in Find job</label>' : '') +
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div><div id="notebox"></div>' +
@@ -307,7 +308,7 @@
         var picked = state.pickedJob && state.pickedJob.id === j.id;
         var ph = phaseOf(j), st = stBubble(j, edit);
         return '<div class="jobrow hasgo' + (st ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-          '<span class="name">' + esc(jn(j)) + noteMark(j) + '</span>' + (ph ? '<span class="phase">' + esc(ph) + '</span>' : '') +
+          '<span class="name">' + esc(jn(j)) + noteMark(j) + '</span>' + (ph || j.closed ? '<span class="phase">' + esc(ph) + (j.closed ? (ph ? ' \u00b7 ' : '') + 'Closed' : '') + '</span>' : '') +
           '<span class="sub">Created ' + esc(fmtShort(j.createdAt)) + ' \u00b7 ' + (j.photoCount ? 'Has photos' : 'No photos') + '</span></button>' + st + goBtn(j) + '</div></div>';
       }).join('') + newJobRow();
     }
@@ -320,7 +321,7 @@
     if (value.trim().length < 2) { state.jobs = []; renderResults(); return; }
     searchTimer = setTimeout(function () {
       var seq = ++state.searchSeq;
-      API.call('searchJobs', { q: value }).then(function (r) {
+      API.call('searchJobs', { q: value, includeDone: !!(state.isAdmin && state.showDone) }).then(function (r) {
         if (seq !== state.searchSeq) return;
         state.jobs = r.jobs;
         if (state.pickedJob && !r.jobs.some(function (j) { return j.id === state.pickedJob.id; })) state.pickedJob = null;
@@ -2594,6 +2595,7 @@ function renderEditor() {
     if (t.id === 'njCustQ') return onCustSearch(t.value);
     if (t.id === 'mvQ') return onMvSearch(t.value);
     if (t.id === 'mvNewCust') return onMvCust(t.value);
+    if (t.id === 'showDone') { state.showDone = t.checked; return onSearchInput(state.query); }
     if (t.id === 'ejName') return ejCount();
     if (t.id === 'ejCust' && state.ej) { state.ej.custName = t.value; return; }
     if (t.id === 'mvName' && state.mv) { state.mv.name = t.value; var gb = $('[data-act="mvGo"]'); if (gb && !state.mv.busy) gb.disabled = !(t.value.trim().length >= 3 && (state.mv.cust || state.mv.newCust.trim().length >= 2)); return; }
