@@ -2371,13 +2371,86 @@ function renderEditor() {
         '<div class="ejcust"><div class="lab">Customer</div>' +
         (i.customer ? '<input id="ejCust" maxlength="100" value="' + esc(e.custName) + '">' +
           '<button class="btn" data-act="ejRename">Rename customer</button>' +
-          '<p class="small muted">Renaming changes it on <b>all ' + i.customer.jobs + ' job' + (i.customer.jobs === 1 ? '' : 's') + '</b> of this customer. ' +
-          'To move this job to a different customer, do it in JobTread (JobTread does not let other apps do that).</p>'
+          '<p class="small muted">Renaming changes it on <b>all ' + i.customer.jobs + ' job' + (i.customer.jobs === 1 ? '' : 's') + '</b> of this customer.</p>'
           : '<p class="small muted">This job has no customer in JobTread.</p>') +
+        (state.isAdmin && i.customer ? ccBlock() : '') +
         '<div class="lab">Add a new customer</div><input id="ejNewCust" maxlength="100" placeholder="New customer name">' +
         '<button class="btn" data-act="ejAddCust">Add customer to JobTread</button><p class="small msg" id="ejCustMsg"></p></div>') +
       '</div></main>';
     ejCount();
+  }
+  /* --- Move the job to another customer (Admins). JobTread cannot move a job, so the Script REPLACES it the Smart Window
+     way: a new job under the new customer with everything copied, then the old job closed as Lost with the
+     "MOVED #new" trail Smart Window reads (it then moves the Dropbox folder and the QBO project). --- */
+  var ccTimer = null;
+  function ccBlock() {
+    return '<div class="ccbox"><div class="lab">Move this job to another customer</div>' +
+      '<input id="ccQ" maxlength="100" placeholder="Type the other customer\'s name" autocomplete="off">' +
+      '<div id="ccList" class="cclist"></div><div id="ccPlan"></div><p class="small msg" id="ccMsg"></p></div>';
+  }
+  function onCcQ(v) {
+    var e = state.ej; if (!e) return; clearTimeout(ccTimer); e.cc = null; var pl = $('#ccPlan'); if (pl) pl.innerHTML = '';
+    if (v.trim().length < 2) { $('#ccList').innerHTML = ''; return; }
+    ccTimer = setTimeout(function () {
+      API.call('adminCustomers', { q: v }).then(function (r) {
+        var box = $('#ccList'); if (!box || state.ej !== e) return;
+        var cur = e.info.customer ? e.info.customer.id : '';
+        var list = (r.customers || []).filter(function (c) { return c.id !== cur; });
+        e.ccList = list;
+        box.innerHTML = !list.length ? '<p class="small muted">No other customer found. Add it below first, then search again.</p>' :
+          list.map(function (c, k) { return '<button class="job" data-act="ccPick" data-i="' + k + '"><span class="name">' + esc(c.name) + '</span></button>'; }).join('');
+      }).catch(function (err) { handleError(err, $('#ccMsg')); });
+    }, 300);
+  }
+  function ejDirty() {
+    var i = state.ej.info;
+    return $('#ejName').value !== i.name || $('#ejLong').value !== i.longName || $('#ejAddr').value !== i.address ||
+      $$('.ejsel').some(function (s) { return s.value !== (i.values[s.dataset.fid] || ''); });
+  }
+  function ccPick(k) {
+    var e = state.ej, c = e.ccList && e.ccList[k]; if (!c) return;
+    if (ejDirty()) { $('#ccMsg').textContent = 'Save (or undo) the other changes on this page first. A job is not renamed and moved in the same step.'; return; }
+    $('#ccList').innerHTML = ''; $('#ccQ').value = c.name; $('#ccMsg').textContent = 'Reading the job from JobTread...';
+    API.call('ccPlan', { jobId: e.info.id, accountId: c.id }).then(function (p) {
+      if (state.ej !== e) return;
+      e.cc = { to: c, plan: p, busy: false }; $('#ccMsg').textContent = ''; paintCcPlan();
+    }).catch(function (err) { handleError(err, $('#ccMsg')); });
+  }
+  function paintCcPlan() {
+    var e = state.ej, cc = e.cc, box = $('#ccPlan'); if (!box || !cc) return;
+    var p = cc.plan, o = p.old, n = p.counts, t = p.trail, row = function (a, b) { return '<li><b>' + a + '</b> ' + b + '</li>'; };
+    box.innerHTML = '<div class="ccplan"><p><b>JT #' + esc(o.number) + ' ' + esc(o.name) + '</b><br>' + esc(o.customer) + ' &rarr; <b>' + esc(p.to.name) + '</b></p>' +
+      (p.resume ? '<p class="small msg">A change was started before (new JT #' + esc(p.resume.newNo) + '). Continue finishes it.</p>' : '') +
+      '<p class="small muted">JobTread cannot move a job, so it is replaced:</p><ol class="small">' +
+      row('New job', 'under ' + esc(p.to.name) + ': ' + esc(p.to.location) + '. Same name, description, ' + n.fields + ' custom fields, ' + n.tasks + ' tasks and the budget.') +
+      row('Copied', n.files + ' files and ' + n.logs + ' daily logs, oldest first, each saying who and when (' + n.posts + ' posts).') +
+      row('Old job', 'closed ' + esc(t.closedOn) + ', Status ' + esc(t.status) + ', name "' + esc(t.name) + '", long name "' + esc(t.longName) + '", description "' + esc(t.description) + '" (#NEW = the new job number).') +
+      row('Not here', 'Dropbox and QuickBooks: Smart Window moves the job folder and the QBO project when it sees the change. Nothing is deleted.') +
+      '</ol>' + (p.warn || []).map(function (w) { return '<p class="small msg">' + esc(w) + '</p>'; }).join('') +
+      '<div class="row2"><button class="btn primary" data-act="ccGo"' + (cc.busy || p.wait ? ' disabled' : '') + '>' + (cc.busy ? 'Working...' : p.resume ? 'Continue' : 'Confirm change in JobTread') + '</button>' +
+      '<button class="btn" data-act="ccCancel"' + (cc.busy ? ' disabled' : '') + '>Cancel</button></div></div>';
+  }
+  function ccGo() {
+    var e = state.ej, cc = e && e.cc; if (!cc || cc.busy) return;
+    cc.busy = true; paintCcPlan(); var msg = $('#ccMsg'); msg.textContent = 'Making the new job in JobTread... keep this page open.';
+    var step = function () {
+      return API.call('ccRun', { jobId: e.info.id, accountId: cc.to.id }).then(function (r) {
+        if (!r.done) { msg.textContent = 'New JT #' + r.newNo + ': copying... ' + r.left + ' more to copy. Keep this page open.'; return step(); }
+        cc.busy = false; e.cc = null;
+        $('#ccPlan').innerHTML = '<div class="ccplan"><p><b>Done.</b> New JT #' + esc(r.newNo) + ' is under <b>' + esc(r.customer) + '</b> with ' + r.files + ' files. ' +
+          'Old JT #' + esc(r.oldNo) + ' is closed (Lost, MOVED #' + esc(r.newNo) + '). Smart Window moves the Dropbox folder and the QBO project.</p></div>';
+        msg.textContent = ''; toast('Job moved to ' + r.customer + ' (new JT #' + r.newNo + ').');
+        state.myJobs = (state.myJobs || []).map(function (m) { return m.id === e.info.id ? Object.assign({}, m, { id: r.newId }) : m; });
+        // this device's note goes with the job (the old one is kept too)
+        var on = noteGet(e.info.id); if (on && !noteGet(r.newId)) { try { localStorage.setItem(noteKey(r.newId), JSON.stringify(on)); } catch (x) { /* full */ } }
+        if (state.pickedJob && state.pickedJob.id === e.info.id) state.pickedJob = Object.assign({}, state.pickedJob, { id: r.newId });
+        loadActiveJobs(true); loadWoJobs(true);
+      });
+    };
+    step().catch(function (err) {
+      cc.busy = false; cc.plan.resume = cc.plan.resume || { newNo: '?' }; paintCcPlan();
+      handleError(err, msg);
+    });
   }
   function ejCount() { var n = $('#ejName'), c = $('#ejCnt'); if (n && c) c.textContent = '(' + n.value.length + ' of 30)'; }
   function ejSave() {
@@ -2549,6 +2622,9 @@ function renderEditor() {
       case 'ejSave': return ejSave();
       case 'ejRename': return ejRename();
       case 'ejAddCust': return ejAddCust();
+      case 'ccPick': return ccPick(Number(el.dataset.i));
+      case 'ccGo': return ccGo();
+      case 'ccCancel': if (state.ej) { state.ej.cc = null; $('#ccPlan').innerHTML = ''; $('#ccQ').value = ''; } return;
       case 'mvMode': mvKeep(); state.mv.mode = el.dataset.mode === 'new' ? 'new' : 'old'; return renderMoveTemp();
       case 'mvPickCust': mvKeep(); state.mv.cust = state.mv.custs[Number(el.dataset.i)]; return renderMoveTemp();
       case 'mvCustClear': mvKeep(); state.mv.cust = null; return renderMoveTemp();
@@ -2694,6 +2770,7 @@ function renderEditor() {
     if (t.id === 'mvNewCust') return onMvCust(t.value);
     if (t.id === 'showDone') { state.showDone = t.checked; return onSearchInput(state.query); }
     if (t.id === 'ejName') return ejCount();
+    if (t.id === 'ccQ') return onCcQ(t.value);
     if (t.id === 'ejCust' && state.ej) { state.ej.custName = t.value; return; }
     if (t.id === 'mvName' && state.mv) { state.mv.name = t.value; var gb = $('[data-act="mvGo"]'); if (gb && !state.mv.busy) gb.disabled = !(t.value.trim().length >= 3 && (state.mv.cust || state.mv.newCust.trim().length >= 2)); return; }
     if (t.id === 'noteText' && state.pickedJob) {
