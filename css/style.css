@@ -648,3 +648,7 @@ details.user .ucount { margin-left: auto; }
 .btn.big { min-height: 52px; font-size: 17px; margin-top: 8px; }
 .njmode button { border: 1px solid var(--line); border-radius: 10px; background: #fff; font-weight: 700; color: var(--muted); cursor: pointer; }
 .njmode button.on { border-color: var(--blue); background: #eef4ff; color: var(--blue); }
+/* Find job results: name, Status and created/photos stacked; ▾ Status and → actions on the right like the lists. */
+#results .jobcell .job { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; text-align: left; }
+#results .phase { font-size: 11px; color: var(--muted); font-weight: 600; }
+#results .job.picked .phase, #results .job.picked .sub { color: rgba(255,255,255,.85); }

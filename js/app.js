@@ -302,11 +302,13 @@
     if (state.query.trim().length < 2) { box.innerHTML = ''; }
     else if (!state.jobs.length) { box.innerHTML = '<p class="muted">No jobs found. Try fewer words or just the house number.</p>' + newJobRow(); }
     else {
+      var edit = canStatus();
       box.innerHTML = state.jobs.map(function (j) {
         var picked = state.pickedJob && state.pickedJob.id === j.id;
-        return '<div class="jobrow">' + starBtn(j) + '<button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
-          '<span class="name">' + esc(jn(j)) + '<div class="sub">Created ' + esc(fmtShort(j.createdAt)) + '</div></span>' +
-          '<span class="badge' + (j.photoCount ? ' has' : '') + '">' + (j.photoCount ? 'Has photos' : 'No photos') + '</span></button></div>';
+        var ph = phaseOf(j), st = stBubble(j, edit);
+        return '<div class="jobrow hasgo' + (st ? ' hasst' : '') + '">' + starBtn(j) + '<div class="jobcell"><button class="job' + (picked ? ' picked' : '') + '" data-act="pick" data-id="' + esc(j.id) + '" aria-pressed="' + !!picked + '">' +
+          '<span class="name">' + esc(jn(j)) + noteMark(j) + '</span>' + (ph ? '<span class="phase">' + esc(ph) + '</span>' : '') +
+          '<span class="sub">Created ' + esc(fmtShort(j.createdAt)) + ' \u00b7 ' + (j.photoCount ? 'Has photos' : 'No photos') + '</span></button>' + st + goBtn(j) + '</div></div>';
       }).join('') + newJobRow();
     }
   }
@@ -549,14 +551,14 @@
   }
   function changeStatus(sel) {
     var id = sel.dataset.id, to = sel.value;
-    var j = (state.wo || []).concat(state.active || []).filter(function (x) { return x.id === id; })[0];
+    var j = (state.wo || []).concat(state.active || [], state.jobs || []).filter(function (x) { return x.id === id; })[0];
     if (!j || j.phase === to) return;
     if (!confirm('Change the JobTread Status of\n' + jn(j) + '\n\nfrom "' + (j.phase || 'none') + '" to "' + to + '"?')) { sel.value = j.phase; return; }
     sel.disabled = true;
     API.call('setJobStatus', { jobId: id, status: to }).then(function (r) {
-      (state.wo || []).concat(state.active || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
+      (state.wo || []).concat(state.active || [], state.jobs || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
       toast('Status changed to ' + r.status + '.');
-      renderWoJobs(); renderActiveJobs(); renderMyJobs(); loadActiveJobs(true);
+      renderResults(); renderWoJobs(); renderActiveJobs(); renderMyJobs(); loadActiveJobs(true);
     }).catch(function (e) { sel.disabled = false; sel.value = j.phase; handleError(e); });
   }
 
