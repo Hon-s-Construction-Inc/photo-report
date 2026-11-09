@@ -376,7 +376,7 @@
   function syncMyJobs() {
     API.call('getMyJobs', { fresh: takeFresh('my') }).then(function (r) {
       var server = r.jobs || [], seen = {}, merged = [];
-      server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '', longName: jn(j) !== j.name ? jn(j) : '' }); } });
+      server.concat(state.myJobs).forEach(function (j) { if (j && j.id && !seen[j.id]) { seen[j.id] = true; merged.push({ id: j.id, name: j.name || '', longName: jn(j) !== j.name ? jn(j) : '', phase: j.phase || '' }); } });
       state.myJobs = sortMyJobs(merged); cacheMyJobs(); paintStars();
       if (merged.length > server.length) API.call('setMyJobs', { jobs: state.myJobs }).catch(function () { /* next time */ });
     }).catch(function () { /* keep the cached copy */ });
@@ -551,12 +551,13 @@
   }
   function changeStatus(sel) {
     var id = sel.dataset.id, to = sel.value;
-    var j = (state.wo || []).concat(state.active || [], state.jobs || []).filter(function (x) { return x.id === id; })[0];
+    var j = (state.wo || []).concat(state.active || [], state.jobs || [], state.myJobs || []).filter(function (x) { return x.id === id && phaseOf(x); })[0];
+    if (j && !j.phase) j = Object.assign({}, j, { phase: phaseOf(j) });
     if (!j || j.phase === to) return;
     if (!confirm('Change the JobTread Status of\n' + jn(j) + '\n\nfrom "' + (j.phase || 'none') + '" to "' + to + '"?')) { sel.value = j.phase; return; }
     sel.disabled = true;
     API.call('setJobStatus', { jobId: id, status: to }).then(function (r) {
-      (state.wo || []).concat(state.active || [], state.jobs || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
+      (state.wo || []).concat(state.active || [], state.jobs || [], state.myJobs || []).forEach(function (x) { if (x.id === id) x.phase = r.status; });
       toast('Status changed to ' + r.status + '.');
       renderResults(); renderWoJobs(); renderActiveJobs(); renderMyJobs(); loadActiveJobs(true);
     }).catch(function (e) { sel.disabled = false; sel.value = j.phase; handleError(e); });
