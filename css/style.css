@@ -696,3 +696,18 @@ details.user .ucount { margin-left: auto; }
   .home .cols.tabbed #myJobs .jobcell .job { padding-left: 10px; }
 }
 @media (min-width: 761px) and (max-width: 1100px) { .home .cols.tabbed #myJobs { padding-left: 4px; padding-right: 8px; } }
+/* All notes page */
+.page.notes { max-width: 820px; margin: 0 auto; padding: 16px; }
+.anlist { display: grid; gap: 10px; margin-top: 10px; }
+.ancard { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; width: 100%; padding: 12px 14px; min-height: 44px;
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; font: inherit; color: var(--ink); }
+.ancard:hover { border-color: var(--blue); }
+.ancard .antext { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.4; max-height: 9.8em; overflow: hidden; }
+.ancard .anjob { font-weight: 700; color: var(--blue); font-size: 14px; }
+/* My notes window */
+.notemodal { position: fixed; inset: 0; z-index: 80; background: rgba(16,24,40,.35); display: flex; align-items: flex-start; justify-content: center; padding: 64px 12px 12px; }
+.notemodal .notecard { width: 100%; max-width: 620px; background: #fff; border-radius: var(--radius); padding: 14px; box-shadow: 0 12px 32px rgba(16,24,40,.25); }
+.notemodal .notehead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.notemodal .notejob { flex: 1; min-width: 0; color: var(--blue); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notemodal textarea { width: 100%; font-size: 16px; }
+@media (max-width: 600px) { .topbar > .dd.notesdd { order: 3; } }   /* phones: Settings on row 1; My tasks and All notes on row 2 */

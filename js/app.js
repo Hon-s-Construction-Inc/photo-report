@@ -105,6 +105,7 @@
   function render() {
     destroySortables();
     document.body.classList.toggle('editing', state.view === 'editor');
+    if (state.view !== 'search') { var nbx = document.getElementById('notebox'); if (nbx) nbx.remove(); }
     if (state.view === 'login') renderLogin();
     else if (state.view === 'search') renderSearch();
     else if (state.view === 'editor') renderEditor();
@@ -119,6 +120,7 @@
     else if (state.view === 'newjob') renderNewJob();
     else if (state.view === 'movetemp') renderMoveTemp();
     else if (state.view === 'editjob') renderEditJob();
+    else if (state.view === 'notes') renderAllNotes();
   }
 
   function handleError(err, msgEl) {
@@ -180,12 +182,14 @@
       '<header class="topbar"><img class="logo-sm" src="icons/logo.jpg" alt="HCI"><div class="grow"><div class="title">HCI App</div></div>' +
       '<span class="small muted userName">' + esc(state.user ? state.user.name : '') + '</span>' +
       (can('tasks') ? '<button class="btn small" data-act="tasks">&#9745; My tasks</button>' : '') +
+      '<div class="dd notesdd"><button class="btn small" data-act="menu" aria-haspopup="true" aria-expanded="false">&#128221; All notes &#9662;</button>' +
+      '<div class="ddm" hidden><button data-act="allNotes" data-v="active">Active jobs</button><button data-act="allNotes" data-v="inactive">Inactive jobs</button></div></div>' +
       settingsMenu() + '</header>' +
       '<main class="home">' +
       (state.isAdmin ? '<label class="showdone"><input type="checkbox" id="showDone"' + (state.showDone ? ' checked' : '') + '> Show complete / closed jobs in Find job</label>' : '') +
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
-      '<div class="selbox" id="selbox"></div><div id="notebox"></div>' +
+
       // Lists as tabs (like Excel sheets): My jobs / Contract jobs (non Green Tree WO) / WO (Green Tree work orders).
       // Actions are on each job's → arrow; the old Action box stays hidden only because the → menu copies its items.
       '<div class="tabs" role="tablist">' + tabBtn('my', 'My jobs', 'myCnt') + tabBtn('active', 'Contract jobs', 'activeCnt') + tabBtn('wo', 'WO', 'woCnt') + '</div>' +
@@ -205,27 +209,28 @@
   function noteGet(id) { try { var n = JSON.parse(localStorage.getItem(noteKey(id)) || 'null'); return n && n.text ? n : null; } catch (e) { return null; } }
   function noteSet(id, text) {
     try {
-      if (String(text).trim()) localStorage.setItem(noteKey(id), JSON.stringify({ text: text, at: Date.now() }));
+      var pj = state.pickedJob && state.pickedJob.id === id ? state.pickedJob : null;
+      if (String(text).trim()) localStorage.setItem(noteKey(id), JSON.stringify({ text: text, at: Date.now(), name: pj ? jn(pj) : ((noteGet(id) || {}).name || '') }));
       else localStorage.removeItem(noteKey(id));
       return true;
     } catch (e) { return false; }
   }
   function noteMark(j) { return noteGet(j.id) ? ' <span class="hasnote" title="You have notes on this job">&#128221;</span>' : ''; }
+  // My notes opens in its own window over the home screen (from the → menu or the All notes page).
   function renderNote() {
-    var box = $('#notebox'); if (!box) return;
-    var j = state.pickedJob;
-    if (!j || !state.noteOpen) { box.innerHTML = ''; return; }
+    var box = $('#notebox'), j = state.pickedJob;
+    if (!j || !state.noteOpen || state.view !== 'search') { if (box) box.remove(); return; }
+    if (!box) { box = document.createElement('div'); box.id = 'notebox'; box.className = 'notemodal'; document.body.appendChild(box); }
     var n = noteGet(j.id);
-    box.innerHTML = '<div class="notecard"><textarea id="noteText" rows="5" placeholder="Notes for this job: gate code, who to call, what to bring...">' + esc(n ? n.text : '') + '</textarea>' +
+    box.innerHTML = '<div class="notecard" role="dialog" aria-label="My notes"><div class="notehead"><b>&#128221; My notes</b><span class="notejob">' + esc(jn(j)) + '</span>' +
+      '<button class="btn small" data-act="noteClose" aria-label="Close">Done</button></div><textarea id="noteText" rows="5" placeholder="Notes for this job: gate code, who to call, what to bring...">' + esc(n ? n.text : '') + '</textarea>' +
       '<div class="notefoot"><span class="small muted" id="noteInfo">' + (n ? 'Saved ' + esc(fmtDateTime(new Date(n.at).toISOString())) + ' &middot; ' : '') + 'Only on this device, only for you. Not saved to JobTread.</span>' +
       (n ? '<button class="link small" data-act="noteDelete">Delete note</button>' : '') + '</div></div>';
   }
 
   // The right-hand half of the home screen: the selected job, then View / Upload buttons (only the ones this person may use).
   function renderActions() {
-    var j = state.pickedJob, sb = $('#selbox'); if (!sb) return;
-    sb.innerHTML = '<span class="lab">Working on:</span><div class="selname' + (j ? '' : ' none') + '">' + (j ? esc(jn(j)) +
-      '<button class="btn small notebtn' + (noteGet(j.id) ? ' has' : '') + '" data-act="noteToggle" aria-expanded="' + !!state.noteOpen + '">&#128221; My notes</button>' + starBtn(j, true) : 'Find a job above, or tap one in any list below') + '</div>';
+    var j = state.pickedJob;
     renderNote();
     // The app draws its own menu (not the browser's <select>) so each row is tall enough for a gloved finger.
     var o = function (act, text, perm) { return perm ? '<button class="actopt" data-act="runAct" data-run="' + act + '">' + text + '</button>' : ''; };
@@ -233,7 +238,7 @@
     // Photos (Upload photos, Make a report).
     var tmp = j && j.temp;   // a temporary job only has photos until an Admin moves it to a real job
     var items = (tmp ? '' : o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload'))) +
-      o('goGallery', 'Photos', can('photos') || can('report') || can('upload')) +
+      o('goGallery', 'Photos', can('photos') || can('report') || can('upload')) + o('goNote', 'My notes', true) +
       (tmp ? '' : o('goAssign', 'Assign project manager', canAssign()) + o('goEditJob', 'Edit job information', canAssign() && canWrite()));
     var box = $('#actionBox'); if (!box) return;
     if (!items) { box.innerHTML = '<p class="small muted">No actions are switched on for you yet. Ask an Admin.</p>'; return; }
@@ -255,6 +260,11 @@
       case 'goAddTodo': return openTodos(j, true);
       case 'goFiles': return openFiles(j, 'search');
       case 'goGallery': return openGallery(j);
+      case 'goNote': {
+        state.noteOpen = true; renderNote();
+        setTimeout(function () { var nt = $('#noteText'); if (nt) nt.focus(); }, 100);
+        return;
+      }
       case 'goUpload': return openUpload(j, 'search');
       case 'goReport': return pullJob(j);
       case 'goAssign': return openAssign(j);
@@ -2268,6 +2278,61 @@ function renderEditor() {
   }
 
   /* --- Admin: move a temporary job's photos to the real job */
+  /* ------------------------------------------------------------------ All notes (this person's notes on this device) */
+  // Inactive = closed in JobTread, or Status Complete / Canceled / On Hold / Lost. Everything else is Active.
+  var INACTIVE = ['Complete', 'Canceled', 'On Hold', 'Lost'];
+  function allNoteIds() {
+    var pre = noteKey(''), ids = [];
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(pre) === 0) ids.push(k.slice(pre.length)); } } catch (e) { /* none */ }
+    return ids.filter(function (id) { return noteGet(id); });
+  }
+  function openAllNotes(which) {
+    closeMenus();
+    var ids = allNoteIds();
+    state.an = { which: which === 'inactive' ? 'inactive' : 'active', ids: ids, jobs: null, err: '' };
+    go('notes');
+    var real = ids.filter(function (id) { return !/^T~/.test(id); });
+    if (!real.length) { state.an.jobs = {}; return renderAllNotes(); }
+    var an = state.an;
+    API.call('jobsBrief', { ids: real }).then(function (r) {
+      if (state.an !== an) return;
+      an.jobs = {}; (r.jobs || []).forEach(function (j) { an.jobs[j.id] = j; });
+      renderAllNotes();
+    }).catch(function (e) { an.jobs = {}; an.err = (e && e.message) || 'Could not read the jobs from JobTread.'; renderAllNotes(); });
+  }
+  function noteJobInactive(j) { return !!(j && (j.closed || INACTIVE.indexOf(j.phase) > -1)); }
+  function renderAllNotes() {
+    var an = state.an; if (!an) return go('search');
+    var rows = an.ids.map(function (id) {
+      var n = noteGet(id), j = an.jobs ? an.jobs[id] : null, t = (state.temps || []).filter(function (x) { return x.id === id; })[0];
+      return { id: id, n: n, job: j || t || null, name: j ? jn(j) : t ? jn(t) : (n && n.name) || 'Job ' + id, phase: j ? (j.phase || '') + (j.closed ? (j.phase ? ' · ' : '') + 'Closed' : '') : '', off: noteJobInactive(j) };
+    }).filter(function (r) { return r.n && (an.which === 'inactive' ? r.off : !r.off); })
+      .sort(function (a, b) { return (b.n.at || 0) - (a.n.at || 0); });
+    var other = an.which === 'inactive' ? 'active' : 'inactive';
+    app.innerHTML =
+      '<header class="topbar"><button class="btn small" data-act="anBack">&larr; Back</button><div class="grow"><div class="title">All notes</div></div></header>' +
+      '<main class="page notes">' +
+      '<div class="njmode"><button class="' + (an.which === 'active' ? 'on' : '') + '" data-act="allNotes" data-v="active">Active jobs</button>' +
+      '<button class="' + (an.which === 'inactive' ? 'on' : '') + '" data-act="allNotes" data-v="inactive">Inactive jobs</button></div>' +
+      '<p class="small muted">Your notes on this device. Inactive = closed, Complete, Canceled, On Hold or Lost. Tap a note to open its job.</p>' +
+      (an.err ? '<p class="small msg">' + esc(an.err) + '</p>' : '') +
+      (!an.jobs ? '<p class="muted">Loading the jobs from JobTread...</p>' :
+        !rows.length ? '<p class="muted">No notes on ' + (an.which === 'inactive' ? 'inactive' : 'active') + ' jobs. <button class="link" data-act="allNotes" data-v="' + other + '">See ' + other + ' jobs</button></p>' :
+        '<div class="anlist">' + rows.map(function (r) {
+          return '<button class="ancard" data-act="anOpen" data-id="' + esc(r.id) + '"><span class="antext">' + esc(r.n.text) + '</span>' +
+            '<span class="anjob">' + esc(r.name) + (r.phase ? ' <span class="small muted">· ' + esc(r.phase) + '</span>' : '') + '</span>' +
+            '<span class="small muted">Saved ' + esc(fmtDateTime(new Date(r.n.at || Date.now()).toISOString())) + '</span></button>';
+        }).join('') + '</div>') +
+      '</main>';
+  }
+  function anOpen(id) {
+    var an = state.an, j = an && an.jobs && an.jobs[id], n = noteGet(id);
+    var t = (state.temps || []).filter(function (x) { return x.id === id; })[0];
+    state.pickedJob = t || { id: id, name: j ? j.name : (n && n.name) || '' , longName: j ? j.longName : '' };
+    state.noteOpen = true; state.an = null;
+    go('search');
+  }
+
   /* ------------------------------------------------------------------ Edit job information (Admins, Operations Manager) */
   function openEditJob(j) {
     state.ej = { job: j, info: null, busy: false, msg: '' };
@@ -2470,6 +2535,9 @@ function renderEditor() {
       case 'njCreate': return createNewJob();
       case 'moveTemp': return openMoveTemp(el.dataset.id);
       case 'mvBack': return go('search');
+      case 'allNotes': return openAllNotes(el.dataset.v);
+      case 'anBack': state.an = null; return go('search');
+      case 'anOpen': return anOpen(el.dataset.id);
       case 'ejBack': state.ej = null; return go('search');
       case 'ejSave': return ejSave();
       case 'ejRename': return ejRename();
@@ -2529,9 +2597,9 @@ function renderEditor() {
       case 'taskNote': el.closest('.task').classList.toggle('open'); return;
       case 'taskJob': return can('report') ? pullJob({ id: el.dataset.id, name: el.dataset.name }) : openFiles({ id: el.dataset.id, name: el.dataset.name }, 'search');
       case 'admin': return openAdmin();
-      case 'noteToggle': state.noteOpen = !state.noteOpen; renderActions(); if (state.noteOpen) { var nt = $('#noteText'); if (nt) nt.focus(); } return;
+      case 'noteClose': state.noteOpen = false; return renderNote();
       case 'noteDelete':
-        if (state.pickedJob && confirm('Delete your notes for this job? This cannot be undone.')) { noteSet(state.pickedJob.id, ''); renderActions(); renderMyJobs(); renderActiveJobs(); renderWoJobs(); }
+        if (state.pickedJob && confirm('Delete your notes for this job? This cannot be undone.')) { noteSet(state.pickedJob.id, ''); state.noteOpen = false; renderNote(); renderMyJobs(); renderActiveJobs(); renderWoJobs(); }
         return;
       case 'stfDrop': {
         var cur = (state.listSt[el.dataset.list] || []).filter(function (s) { return s !== el.dataset.st; });
@@ -2625,7 +2693,7 @@ function renderEditor() {
       var had = !!noteGet(state.pickedJob.id);
       if (!noteSet(state.pickedJob.id, t.value)) { toast('Could not save the note: this device is out of space.'); return; }
       var info = $('#noteInfo'); if (info) info.textContent = (t.value.trim() ? 'Saved just now \u00b7 ' : '') + 'Only on this device, only for you. Not saved to JobTread.';
-      if (had !== !!t.value.trim()) { var nb = $('.notebtn'); if (nb) nb.classList.toggle('has', !had); renderMyJobs(); renderActiveJobs(); renderWoJobs(); }
+      if (had !== !!t.value.trim()) { renderMyJobs(); renderActiveJobs(); renderWoJobs(); }
       return;
     }
     if (t.classList.contains('listq')) {
