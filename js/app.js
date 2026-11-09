@@ -186,10 +186,13 @@
       '<div class="findrow"><label for="q">Find job</label><input id="q" type="search" autocomplete="off" autocapitalize="off" placeholder="House number and street, e.g. 1900 Gough" aria-label="Search jobs" value="' + esc(state.query) + '">' +
       '<div id="results" class="results drop"></div></div>' +
       '<div class="selbox" id="selbox"></div><div id="notebox"></div>' +
-      '<div class="cols"><section class="col"><div class="lab labrow">My jobsite</div>' + listTools('my') + '<div id="myJobs"></div></section>' +
-      '<section class="col act"><div class="lab labrow">Action</div><div class="ltools stf-spacer" aria-hidden="true"></div><div id="actionBox"></div></section>' +
-      '<section class="col active"><div class="lab labrow">Non Green Tree WO jobs <b class="cnt" id="activeCnt"></b>' + '</div>' + listTools('active') + '<div id="activeJobs"></div></section>' +
-      '<section class="col wo"><div class="lab labrow">Green Tree Work orders <b class="cnt" id="woCnt"></b>' + '</div>' + listTools('wo') + '<div id="woJobs"></div></section>' +
+      // Lists as tabs (like Excel sheets): My jobs / Contract jobs (non Green Tree WO) / WO (Green Tree work orders).
+      // Actions are on each job's → arrow; the old Action box stays hidden only because the → menu copies its items.
+      '<div class="tabs" role="tablist">' + tabBtn('my', 'My jobs', 'myCnt') + tabBtn('active', 'Contract jobs', 'activeCnt') + tabBtn('wo', 'WO', 'woCnt') + '</div>' +
+      '<div class="cols tabbed"><section class="col pane" data-pane="my"' + (curTab() === 'my' ? '' : ' hidden') + '>' + listTools('my') + '<div id="myJobs"></div></section>' +
+      '<section class="col act" hidden><div id="actionBox"></div></section>' +
+      '<section class="col pane active" data-pane="active"' + (curTab() === 'active' ? '' : ' hidden') + '>' + listTools('active') + '<div id="activeJobs"></div></section>' +
+      '<section class="col pane wo" data-pane="wo"' + (curTab() === 'wo' ? '' : ' hidden') + '>' + listTools('wo') + '<div id="woJobs"></div></section>' +
       '<section class="col tmp" id="tempCol" hidden><div class="lab labrow">Temporary jobs <b class="cnt" id="tempCnt"></b> <span class="small muted">&middot; new customers, not in JobTread yet</span></div><div id="tempJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs(); loadTemps();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
@@ -472,6 +475,7 @@
     var box = $('#myJobs'); if (!box) return;
     // Closed and Complete jobs are not shown (they stay saved, in case the job is reopened).
     var live = state.myJobs.filter(function (j) { return !j.done; });
+    setCount('#myCnt', live);
     if (!live.length) { box.innerHTML = '<p class="small muted">No jobs marked yet.</p>'; return; }
     statusFilter('my', live);
     var shown = sortMyJobs(listFilter('my', live));
@@ -518,6 +522,21 @@
     statusFilter('wo', state.wo);
     var shown = listFilter('wo', state.wo);
     box.innerHTML = shown.length ? jobListHtml(shown, { byStatus: true }) : noMatch('wo');
+  }
+  // Which list tab is open; remembered on this device only (a convenience, safe to lose).
+  function curTab() {
+    if (!state.tab) { try { state.tab = localStorage.getItem('hci_pr_tab') || 'my'; } catch (e) { state.tab = 'my'; } }
+    return ['my', 'active', 'wo'].indexOf(state.tab) > -1 ? state.tab : 'my';
+  }
+  function tabBtn(k, label, cntId) {
+    var on = curTab() === k;
+    return '<button class="tab' + (on ? ' on' : '') + '" role="tab" aria-selected="' + on + '" data-act="tab" data-tab="' + k + '">' + esc(label) + ' <b class="cnt" id="' + cntId + '"></b></button>';
+  }
+  function showTab(k) {
+    state.tab = k; try { localStorage.setItem('hci_pr_tab', k); } catch (e) { /* this device only */ }
+    $$('.tabs .tab').forEach(function (b) { var on = b.dataset.tab === k; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    $$('.cols.tabbed .pane').forEach(function (p) { p.hidden = p.dataset.pane !== k; });
+    closeMenus();
   }
   function setCount(sel, list) { var el = $(sel); if (el) el.textContent = list ? '(' + list.length + ')' : ''; }
   // Who may change a job's Status here: the "status" switch (Admin screen) and a working JobTread key.
@@ -2459,6 +2478,7 @@ function renderEditor() {
       case 'mvPick': state.mv.target = state.mv.jobs[Number(el.dataset.i)]; return renderMoveTemp();
       case 'mvClear': state.mv.target = null; return renderMoveTemp();
       case 'mvGo': return runMove();
+      case 'tab': return showTab(el.dataset.tab);
       case 'goAct': {
         var listId = (el.closest('[id]') || {}).id, gid = el.dataset.id;
         pickJob(gid);

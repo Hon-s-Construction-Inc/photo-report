@@ -655,3 +655,12 @@ details.user .ucount { margin-left: auto; }
 /* Admin: show complete / closed jobs in Find job */
 .showdone { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0 0 4px; font-size: 14px; color: var(--muted); min-height: 36px; cursor: pointer; }
 .showdone input { width: 20px; height: 20px; }
+/* List tabs (like Excel sheet tabs) under the Find job box */
+.tabs { display: flex; gap: 4px; margin: 14px 0 0; border-bottom: 2px solid var(--blue); overflow-x: auto; }
+.tabs .tab { flex: 1 1 0; min-height: 46px; padding: 8px 10px; border: 1px solid var(--line); border-bottom: none; border-radius: 10px 10px 0 0;
+  background: #eef1f5; color: var(--muted); font-size: 15px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.tabs .tab.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+.tabs .tab .cnt { font-weight: 700; color: inherit; opacity: .85; }
+.home .cols.tabbed { display: block; margin-top: 12px; }
+.home .cols.tabbed > .col.pane[hidden], .home .cols.tabbed > .col.act[hidden] { display: none; }
+.home .cols.tabbed > .col.tmp { margin-top: 18px; }
