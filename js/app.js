@@ -237,7 +237,10 @@
     // Three places, each for looking AND adding: To-do list (+ Add a to-do), Files and plans (Upload),
     // Photos (Upload photos, Make a report).
     var tmp = j && j.temp;   // a temporary job only has photos until an Admin moves it to a real job
-    var items = (tmp ? '' : o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload'))) +
+    // Jason 11-09: everyone except Admins gets Photos only in the → menu.
+    var items;
+    if (!state.isAdmin) items = o('goGallery', 'Photos', can('photos') || can('report') || can('upload'));
+    else items = (tmp ? '' : o('goTodos', 'To-do list', can('todo')) + o('goFiles', 'Files and plans', can('files') || can('photos') || can('report') || can('upload'))) +
       o('goGallery', 'Photos', can('photos') || can('report') || can('upload')) + o('goNote', 'My notes', true) +
       (tmp ? '' : o('goAssign', 'Assign project manager', canAssign()) + o('goEditJob', 'Edit job information', canAssign() && canWrite()));
     var box = $('#actionBox'); if (!box) return;
@@ -309,7 +312,7 @@
   }
 
   function newJobRow() {
-    return can('newJob') && state.perms && state.perms.newJob === true ? '<button class="newjobrow" data-act="newJob">+ New (Temporary) Job<span class="small muted">Can\'t find it? Start it here and add photos now.</span></button>' : '';
+    return state.isAdmin && can('newJob') && state.perms && state.perms.newJob === true ? '<button class="newjobrow" data-act="newJob">+ New (Temporary) Job<span class="small muted">Can\'t find it? Start it here and add photos now.</span></button>' : '';
   }
   function renderResults() {
     var box = $('#results'); if (!box) return;
@@ -567,6 +570,7 @@
   // Only the Statuses an Admin allowed this person; a job outside them (or with no known Status) gets no picker.
   // A small ▾ bubble on the job card opens the Status list (a real, invisible <select> sits on top of it).
   function stBubble(j, edit) {
+    if (!state.isAdmin) return '';   // Jason 11-09: only Admins see the ▾ Status picker
     var ph = phaseOf(j), allow = state.statusAllowed;
     if (!edit || !ph || (allow && allow.indexOf(ph) < 0)) return '';
     // Only an Admin may set a job to Complete.
