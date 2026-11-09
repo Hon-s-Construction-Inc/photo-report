@@ -189,10 +189,10 @@
       // Lists as tabs (like Excel sheets): My jobs / Contract jobs (non Green Tree WO) / WO (Green Tree work orders).
       // Actions are on each job's → arrow; the old Action box stays hidden only because the → menu copies its items.
       '<div class="tabs" role="tablist">' + tabBtn('my', 'My jobs', 'myCnt') + tabBtn('active', 'Contract jobs', 'activeCnt') + tabBtn('wo', 'WO', 'woCnt') + '</div>' +
-      '<div class="cols tabbed"><section class="col pane" data-pane="my"' + (curTab() === 'my' ? '' : ' hidden') + '>' + listTools('my') + '<div id="myJobs"></div></section>' +
+      '<div class="cols tabbed"><section class="col pane" data-pane="my"' + (curTab() === 'my' ? '' : ' hidden') + '>' + paneHead('My jobs', 'myCnt') + listTools('my') + '<div id="myJobs"></div></section>' +
       '<section class="col act" hidden><div id="actionBox"></div></section>' +
-      '<section class="col pane active" data-pane="active"' + (curTab() === 'active' ? '' : ' hidden') + '>' + listTools('active') + '<div id="activeJobs"></div></section>' +
-      '<section class="col pane wo" data-pane="wo"' + (curTab() === 'wo' ? '' : ' hidden') + '>' + listTools('wo') + '<div id="woJobs"></div></section>' +
+      '<section class="col pane active" data-pane="active"' + (curTab() === 'active' ? '' : ' hidden') + '>' + paneHead('Contract jobs', 'activeCnt') + listTools('active') + '<div id="activeJobs"></div></section>' +
+      '<section class="col pane wo" data-pane="wo"' + (curTab() === 'wo' ? '' : ' hidden') + '>' + paneHead('WO', 'woCnt') + listTools('wo') + '<div id="woJobs"></div></section>' +
       '<section class="col tmp" id="tempCol" hidden><div class="lab labrow">Temporary jobs <b class="cnt" id="tempCnt"></b> <span class="small muted">&middot; new customers, not in JobTread yet</span></div><div id="tempJobs"></div></section></div></main>';
     renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs(); loadTemps();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
@@ -538,7 +538,9 @@
     $$('.cols.tabbed .pane').forEach(function (p) { p.hidden = p.dataset.pane !== k; });
     closeMenus();
   }
-  function setCount(sel, list) { var el = $(sel); if (el) el.textContent = list ? '(' + list.length + ')' : ''; }
+  // On iPad and desktop the three lists sit side by side with their own headings (the tabs are for phones).
+  function paneHead(label, cntId) { return '<div class="lab labrow panehd">' + esc(label) + ' <b class="cnt" id="' + cntId + '2"></b></div>'; }
+  function setCount(sel, list) { [sel, sel + '2'].forEach(function (q) { var el = $(q); if (el) el.textContent = list ? '(' + list.length + ')' : ''; }); }
   // Who may change a job's Status here: the "status" switch (Admin screen) and a working JobTread key.
   function canStatus() { return !!(state.perms && state.perms.status === true && canWrite() && (state.statusOptions || []).length); }
   // Order by JobTread's Status order (A New Lead first), then by address.

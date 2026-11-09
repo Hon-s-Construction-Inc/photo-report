@@ -664,3 +664,35 @@ details.user .ucount { margin-left: auto; }
 .home .cols.tabbed { display: block; margin-top: 12px; }
 .home .cols.tabbed > .col.pane[hidden], .home .cols.tabbed > .col.act[hidden] { display: none; }
 .home .cols.tabbed > .col.tmp { margin-top: 18px; }
+/* Phones: tabs. iPad and desktop: the three lists side by side, no tabs. */
+.home .cols.tabbed .panehd { display: none; }
+@media (min-width: 761px) {
+  .tabs { display: none; }
+  .home .cols.tabbed { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: none; gap: 16px; }
+  .home .cols.tabbed > .col.pane, .home .cols.tabbed > .col.pane[hidden] { display: block; grid-area: auto; }
+  .home .cols.tabbed .panehd { display: flex; }
+  .home .cols.tabbed > .col.tmp { grid-area: auto; grid-column: 1 / -1; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {   /* iPad portrait: search box above the Status filter */
+  .home .cols.tabbed .ltools { flex-wrap: wrap; height: auto; }
+  .home .cols.tabbed .ltools > * { flex: 1 1 100%; }
+  .home .cols.tabbed .jobrow .star { width: 36px; }
+}
+@media (min-width: 761px) {   /* narrow side-by-side columns: long words wrap instead of spilling out of the card */
+  .home .cols.tabbed .jobrow, .home .cols.tabbed .jobcell, .home .cols.tabbed .job { min-width: 0; }
+  .home .cols.tabbed .job .name { overflow-wrap: anywhere; }
+}
+/* Rows with both ▾ and →: keep the name clear of both buttons in every list */
+.home :is(#activeJobs, #woJobs, #myJobs, #results) .jobrow.hasgo.hasst .jobcell .job { padding-right: 96px; }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .home :is(#activeJobs, #woJobs) .star.on[hidden] + .jobcell { margin-left: 0; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .home .cols.tabbed #myJobs .jobrow .star.unstar { width: 26px; font-size: 20px; }
+  .home .cols.tabbed #myJobs .jobrow { gap: 2px; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .home .cols.tabbed .job .name { font-size: 15px; }
+  .home .cols.tabbed #myJobs .jobcell .job { padding-left: 10px; }
+}
+@media (min-width: 761px) and (max-width: 1100px) { .home .cols.tabbed #myJobs { padding-left: 4px; padding-right: 8px; } }
