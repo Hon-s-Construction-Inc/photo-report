@@ -182,8 +182,8 @@
       '<header class="topbar"><img class="logo-sm" src="icons/logo.jpg" alt="HCI"><div class="grow"><div class="title">HCI App</div></div>' +
       '<span class="small muted userName">' + esc(state.user ? state.user.name : '') + '</span>' +
       (can('tasks') ? '<button class="btn small" data-act="tasks">&#9745; My tasks</button>' : '') +
-      '<div class="dd notesdd"><button class="btn small" data-act="menu" aria-haspopup="true" aria-expanded="false">&#128221; All notes &#9662;</button>' +
-      '<div class="ddm" hidden><button data-act="allNotes" data-v="active">Active jobs</button><button data-act="allNotes" data-v="inactive">Inactive jobs</button></div></div>' +
+      (state.isAdmin ? '<div class="dd notesdd"><button class="btn small" data-act="menu" aria-haspopup="true" aria-expanded="false">&#128221; All notes &#9662;</button>' +
+      '<div class="ddm" hidden><button data-act="allNotes" data-v="active">Active jobs</button><button data-act="allNotes" data-v="inactive">Inactive jobs</button></div></div>' : '') +
       settingsMenu() + '</header>' +
       '<main class="home">' +
       (state.isAdmin ? '<label class="showdone"><input type="checkbox" id="showDone"' + (state.showDone ? ' checked' : '') + '> Show complete / closed jobs in Find job</label>' : '') +
@@ -862,7 +862,9 @@ function renderEditor() {
   }
 
   // Camera controls inside the report are only shown when this person may upload to JobTread.
-  function canShoot() { return can('upload') && canWrite(); }
+  // Jason 11-09: anyone who makes reports can take new photos into a report. Only Admins send them to JobTread.
+  function canShoot() { return can('report'); }
+  function canUpload() { return state.isAdmin && can('upload') && canWrite(); }
 
   function rowHtml(fid) {
     var f = state.byId[fid]; if (!f) return '';
@@ -1027,7 +1029,7 @@ function renderEditor() {
       renderLibrary();
       if (replaceFid && usedSet()[replaceFid]) replacePhoto(replaceFid, f.id);
       else addToSection([f.id], target);
-      toast('Photo added. You will be asked to save it to JobTread when you generate the PDF.');
+      toast(canUpload() ? 'Photo added. You will be asked to save it to JobTread when you generate the PDF.' : 'Photo added to this report only.');
     }).catch(function (e) { overlay(false); handleError(e); });
   }
   // Photos in the report that only exist on this device so far.
@@ -1207,7 +1209,7 @@ function renderEditor() {
   function generate() {
     if (!photoTotal()) return;
     var pending = localInReport();
-    if (pending.length && canShoot()) {
+    if (pending.length && canUpload()) {
       var msg = pending.length === 1 ? 'The report has 1 new photo from this device that is not in JobTread yet.\n\nUpload it to ' + jn(state.job) + ' now?'
                                      : 'The report has ' + pending.length + ' new photos from this device that are not in JobTread yet.\n\nUpload them to ' + jn(state.job) + ' now?';
       if (confirm(msg)) {
@@ -1354,6 +1356,7 @@ function renderEditor() {
   }
 
   function openUpload(job, from) {
+    if (!state.isAdmin) return toast('Only Admins upload photos to JobTread. Add new photos inside your report.');
     var keep = state.up && state.up.items.length && (!job || !state.up.job || state.up.job.id === job.id);
     if (keep) { state.up.from = from; if (job && !state.up.job) state.up.job = { id: job.id, name: job.name }; }
     else { freeUp(); state.up = newUp(job, from); }
@@ -1853,10 +1856,10 @@ function renderEditor() {
       settingsMenu() + '</header>' +
       '<main class="page files"><div class="fstrip">' +
       (can('photos') || can('report') ? '<button class="ftile" data-act="filesPhotos"><b>&#128247; Photos</b><span>See the job photos, by date or by tag</span></button>' : '') +
-      (can('upload') && canWrite() ? '<button class="ftile" data-act="filesUpload"><b>&#8679; Upload</b><span>Plans, PDFs or photos from this device, with comments</span></button>' : '') +
+      (canUpload() ? '<button class="ftile" data-act="filesUpload"><b>&#8679; Upload</b><span>Plans, PDFs or photos from this device, with comments</span></button>' : '') +
       (can('report') ? '<button class="ftile primary" data-act="filesReport"><b>&#128196; Photo report</b><span>Build a before/after PDF</span></button>' : '') +
       '</div>' +
-      (can('upload') && !canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') +
+      (state.isAdmin && can('upload') && !canWrite() ? '<p class="small msg">' + esc(writeWhy()) + '</p>' : '') +
       (r && !r.off ? '<div class="lab">Plans and files</div>' : '') + body + '</main>';
   }
   function openFileLink(fid) {
@@ -2038,7 +2041,7 @@ function renderEditor() {
     app.innerHTML =
       '<header class="topbar"><button class="btn small" data-act="galleryBack">&larr; Back</button>' +
       '<div class="grow"><div class="title">' + esc(jn(g.job)) + '</div><div class="small muted">' + files.length + ' photos</div></div>' + starBtn(g.job) +
-      groupSwitch('groupGal') + (can('upload') && canWrite() ? '<button class="btn small" data-act="galleryUpload">&#8679; Upload photos</button>' : '') +
+      groupSwitch('groupGal') + (canUpload() ? '<button class="btn small" data-act="galleryUpload">&#8679; Upload photos</button>' : '') +
       (can('report') ? '<button class="btn small primary" data-act="galleryReport">Make a report</button>' : '') + settingsMenu() + '</header>' +
       '<main class="page gallery">' + (files.length ? '<div class="lib gal">' + grid + '</div>' : '<p class="muted">No photos in this job yet.</p>') + '</main>';
   }
