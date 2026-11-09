@@ -1605,12 +1605,16 @@ function renderEditor() {
     }
     var folders = up.info.folders.slice();
     items.forEach(function (i) { var f = folderOf(i); if (folders.indexOf(f) < 0) folders.push(f); });
-    sh.folders = folders;
+    // Photos of a real job always go in Photos, or a sub-folder inside it (temporary jobs keep their own folder).
+    var photoOnly = !(up.job && (up.job.temp || /^T~/.test(up.job.id))) && items.some(function (i) { return i.kind !== 'pdf'; });
+    if (photoOnly) folders = folders.filter(function (f) { return f === 'Photos' || f.indexOf('Photos' + SEP) === 0; });
+    if (photoOnly && folders.indexOf('Photos') < 0) folders.unshift('Photos');
+    sh.folders = folders; sh.photoOnly = photoOnly;
     body.innerHTML = '<div class="folders">' + folders.map(function (f, k) {
       var on = items.every(function (i) { return folderOf(i) === f; });
       return '<button class="folderopt' + (on ? ' on' : '') + '" data-act="sheetFolder" data-fi="' + k + '">&#128193; ' + esc(folderLabel(f)) + '</button>';
     }).join('') + '</div>' +
-      '<div class="newfolder"><label class="small muted" for="newFolder">Or make a new folder (use / for a sub-folder, e.g. Photos/Kitchen)</label>' +
+      '<div class="newfolder"><label class="small muted" for="newFolder">' + (photoOnly ? 'Or make a sub-folder inside Photos, e.g. Kitchen' : 'Or make a new folder (use / for a sub-folder, e.g. Photos/Kitchen)') + '</label>' +
       '<div class="row2"><input id="newFolder" placeholder="New folder name" maxlength="100"><button class="btn small primary" data-act="sheetNewFolder">Use</button></div></div>';
   }
   function toggleTag(tagId) {
@@ -1630,6 +1634,8 @@ function renderEditor() {
   function newFolderName() {
     var v = ($('#newFolder') && $('#newFolder').value || '').replace(/[\\>]/g, '/');
     var parts = v.split('/').map(function (p) { return p.replace(/[^\w .,&()#'-]/g, ' ').replace(/\s+/g, ' ').trim(); }).filter(Boolean).slice(0, 4);
+    var up = state.up;
+    if (up && up.sheet && up.sheet.photoOnly && parts.length && parts[0] !== 'Photos') parts = ['Photos'].concat(parts).slice(0, 4);
     return parts.join(SEP);
   }
 
