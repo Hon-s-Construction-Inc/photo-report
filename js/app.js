@@ -198,7 +198,7 @@
       '<section class="col pane active" data-pane="active"' + (curTab() === 'active' ? '' : ' hidden') + '>' + paneHead('Contract jobs', 'activeCnt') + listTools('active') + '<div id="activeJobs"></div></section>' +
       '<section class="col pane wo" data-pane="wo"' + (curTab() === 'wo' ? '' : ' hidden') + '>' + paneHead('WO', 'woCnt') + listTools('wo') + '<div id="woJobs"></div></section>' +
       '<section class="col tmp" id="tempCol" hidden><div class="lab labrow">Temporary jobs <b class="cnt" id="tempCnt"></b> <span class="small muted">&middot; new customers, not in JobTread yet</span></div><div id="tempJobs"></div></section></div></main>';
-    renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); loadActiveJobs(); loadWoJobs(); loadTemps();
+    renderResults(); renderMyJobs(); renderActions(); renderActiveJobs(); renderWoJobs(); loadActiveJobs(); loadWoJobs(); loadTemps();
     if (!state.myJobs.length && !state.pickedJob) $('#q').focus();
   }
 
