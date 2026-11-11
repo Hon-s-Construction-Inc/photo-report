@@ -1144,12 +1144,13 @@ function renderEditor() {
 
   function blobToJpeg(blob) {
     var maxEdge = CFG.PDF_IMAGE_EDGE || 1000, q = CFG.PDF_IMAGE_QUALITY || 0.75;
-    var make = window.createImageBitmap
-      ? createImageBitmap(blob, { imageOrientation: 'from-image' }).catch(function () { return viaImage(blob); })
-      : viaImage(blob);
-    return make.then(function (bmp) {
-      var sc = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
-      var w = Math.round(bmp.width * sc), h = Math.round(bmp.height * sc);
+    // Jason 11-11: photos looked stretched sideways. Safari's createImageBitmap can give the photo's stored (unturned)
+    // width and height while drawing it turned upright, so a portrait photo was squeezed into a landscape box.
+    // A plain <img> gives the upright size and draws upright in every current browser, so only that is used now.
+    return viaImage(blob).then(function (bmp) {
+      var w0 = bmp.naturalWidth || bmp.width, h0 = bmp.naturalHeight || bmp.height;
+      var sc = Math.min(1, maxEdge / Math.max(w0, h0));
+      var w = Math.max(1, Math.round(w0 * sc)), h = Math.max(1, Math.round(h0 * sc));
       var c = document.createElement('canvas'); c.width = w; c.height = h;
       var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(bmp, 0, 0, w, h);
       return { dataUrl: c.toDataURL('image/jpeg', q), w: w, h: h };
@@ -1157,7 +1158,8 @@ function renderEditor() {
   }
   function viaImage(blob) {
     return new Promise(function (res, rej) {
-      var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = URL.createObjectURL(blob);
+      var i = new Image(), u = URL.createObjectURL(blob);
+      i.onload = function () { setTimeout(function () { URL.revokeObjectURL(u); }, 60000); res(i); }; i.onerror = rej; i.src = u;
     });
   }
   function b64ToBlob(b64, type) {
@@ -1457,11 +1459,9 @@ function renderEditor() {
   /* --- step 2: adding photos --- */
   function compressImage(file) {
     var maxEdge = CFG.UPLOAD_IMAGE_EDGE || 2048, q = CFG.UPLOAD_IMAGE_QUALITY || 0.85;
-    var make = window.createImageBitmap
-      ? createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function () { return viaImage(file); })
-      : viaImage(file);
-    return make.then(function (bmp) {
-      var w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+    // Same as blobToJpeg: a plain <img> keeps the photo's real upright shape (no stretching on iPhone / iPad).
+    return viaImage(file).then(function (bmp) {
+      var w0 = bmp.naturalWidth || bmp.width, h0 = bmp.naturalHeight || bmp.height;
       var sc = Math.min(1, maxEdge / Math.max(w0, h0));
       var w = Math.max(1, Math.round(w0 * sc)), h = Math.max(1, Math.round(h0 * sc));
       var c = document.createElement('canvas'); c.width = w; c.height = h;
